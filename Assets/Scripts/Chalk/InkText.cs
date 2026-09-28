@@ -9,7 +9,8 @@ namespace ChalkPhysics
     /// drawn over it. One line of text; the bulb follows the text's scale, rotation and fading.
     public class InkText : MonoBehaviour
     {
-        const string Gap = "<color=#00000000>M</color>";
+        const string Hidden = "<color=#00000000>{0}</color>";
+        string _gap = string.Format(Hidden, "M");
         Text _t;
         ChalkShape _s;
         string _raw;
@@ -41,9 +42,22 @@ namespace ChalkPhysics
         {
             if (raw == _raw && bulb == _bulb) return;
             _raw = raw ?? ""; _bulb = bulb;
-            _t.text = _raw.Replace(GameState.Bulb, Gap);
+            _gap = MakeGap();
+            _t.text = _raw.Replace(GameState.Bulb, _gap);
             _dirty = true;
             Layout();
+        }
+
+        /// How big the bulb is drawn: in step with the text, but never so small that it stops reading as a bulb
+        /// (a price on a map node is 17 px, where a proportional bulb was a blue smudge).
+        float BulbScale => Mathf.Clamp(Mathf.Max(_t.fontSize / 34f, 0.75f), 0.4f, 1.3f);
+
+        /// Enough invisible "M"s to hold the bulb: a small font's single M is narrower than the enlarged bulb.
+        string MakeGap()
+        {
+            float m = _t.font != null ? Width("M") : 0;
+            int n = m > 0 ? Mathf.Clamp(Mathf.CeilToInt(18f * BulbScale / m), 1, 3) : 1;
+            return string.Format(Hidden, new string('M', n));
         }
 
         float Width(string s)
@@ -77,7 +91,7 @@ namespace ChalkPhysics
             _at.Clear();
             if (_t.font == null) return;
             string shown = _t.text;
-            float line = Width(shown), gap = Width(Gap);
+            float line = Width(shown), gap = Width(_gap);
             var r = _t.rectTransform.rect;
             float start;
             switch (_t.alignment)
@@ -96,11 +110,11 @@ namespace ChalkPhysics
             int from = 0;
             while (true)
             {
-                int i = shown.IndexOf(Gap, from, System.StringComparison.Ordinal);
+                int i = shown.IndexOf(_gap, from, System.StringComparison.Ordinal);
                 if (i < 0) break;
-                float x = start + Width(Closed(shown.Substring(0, i)) + Gap) - gap;
+                float x = start + Width(Closed(shown.Substring(0, i)) + _gap) - gap;
                 _at.Add(x + gap / 2);
-                from = i + Gap.Length;
+                from = i + _gap.Length;
             }
             _w = gap;
         }
@@ -111,7 +125,7 @@ namespace ChalkPhysics
             if (_dirty) { _dirty = false; Layout(); }
             _s.Clear();
             if (_at.Count == 0) return;
-            float k = Mathf.Clamp(_t.fontSize / 34f, 0.4f, 1.3f);
+            float k = BulbScale;
             foreach (var x in _at) Lab.DrawIcon(_s, "bulb", _bulb, k, new Vector2(x, _y + 1));
             var c = _t.color;
             _s.color = new Color(1, 1, 1, c.a);

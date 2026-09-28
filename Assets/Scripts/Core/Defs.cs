@@ -71,6 +71,7 @@ namespace ChalkPhysics
         public Cur cur = Cur.Obs;                  // for CurMult: the currency multiplied
         public Cur cost = Cur.Obs;                 // what it is paid with (a few teasers ask for the next era's coin)
         public double price;
+        public bool early;                         // on the map as soon as its formula is found, before the first joules
     }
 
     public class RevolutionDef { public int to; public double cost; public string[] freeLetters = new string[0]; }
@@ -275,6 +276,8 @@ namespace ChalkPhysics
         public static readonly List<PerkDef> Perks = new List<PerkDef>
         {
             // ---------- mechanics ----------
+            // the first thing on the map to buy, right after the dynamometer: three actions are too few to see what is going on
+            new PerkDef { id = "act0", title = "Лишняя минута", desc = "+1 действие за эксперимент", requires = "dyna", kind = PerkKind.Actions, value = 1, price = 3, early = true },
             new PerkDef { id = "act1", title = "Долгая смена", desc = "+2 действия за эксперимент", requires = "fall", kind = PerkKind.Actions, value = 2, price = 12 },
             new PerkDef { id = "box1", title = "Коробка побольше", desc = "+2 образца в эксперименте", requires = "dyna", kind = PerkKind.Samples, value = 2, price = 8 },
             new PerkDef { id = "box2", title = "Ящик образцов", desc = "+3 образца в эксперименте", requires = "arch", kind = PerkKind.Samples, value = 3, price = 840 },
@@ -361,10 +364,10 @@ namespace ChalkPhysics
         static readonly string[][] TreeRaw =
         {
             // --- mechanics ---
-            // a gentle start: g and m build the dynamometer, its first ideas buy h, h builds the shelf, and only
+            // a gentle start: m and g build the dynamometer, its first ideas buy h, h builds the shelf, and only
             // once the shelf has brought the first joules does the rest of the lab open up
-            new[] { "L:g" },
             new[] { "L:m" },
+            new[] { "L:g" },
             new[] { "F:dyna" },
             new[] { "L:h" },
             new[] { "F:fall" },

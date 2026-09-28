@@ -7,7 +7,7 @@ namespace ChalkPhysics
     public static class ChalkTex
     {
         static Texture2D _stroke, _board, _grain;
-        static Material _textMat;
+        static Material _textMat, _fineTextMat;
         static Font _font;
 
         public static readonly Color White = new Color(0.93f, 0.93f, 0.89f, 0.95f);
@@ -154,10 +154,39 @@ namespace ChalkPhysics
             }
         }
 
+        /// Below this size a label's strokes are a pixel or two wide, and the full chalk cuts them to pieces.
+        public const int FineTextSize = 24;
+
+        /// Small text (prices, units, captions) in a gentler chalk: a lower, calmer edge and hardly any dust,
+        /// so a 17 px "↑ 21" stays whole and still does not look like smooth type.
+        public static Material FineTextMaterial
+        {
+            get
+            {
+                if (_fineTextMat != null) return _fineTextMat;
+                var m = TextMaterial;
+                if (m == null) return null;
+                _fineTextMat = new Material(m) { name = "ChalkTextFine" };
+                _fineTextMat.SetFloat("_Cut", 0.32f);
+                _fineTextMat.SetFloat("_Rag", 0.25f);
+                _fineTextMat.SetFloat("_Soft", 0.16f);
+                _fineTextMat.SetFloat("_Dust", 0.3f);
+                return _fineTextMat;
+            }
+        }
+
+        public static Material TextMaterialFor(int fontSize) => fontSize < FineTextSize ? FineTextMaterial : TextMaterial;
+
         /// Symbols of quantities and formulas: the same hand as everything else, on every platform.
         public static Font MathFont => Font;
 
         /// Marks a label that shows symbols or a formula (kept as the one place to give them a font of their own).
         public static Text Math(Text t) => t;
+
+        /// Letters whose tail hangs below the line (g, p, ρ, μ...): a label under such a symbol would touch it.
+        public static bool Descends(string sym) => sym.IndexOfAny(DescenderChars) >= 0;
+        static readonly char[] DescenderChars = "gjpqyρμηβγζξφχψрудфцщ".ToCharArray();
+        /// How far a symbol of this size is raised when it has a tail, so its tail clears the label under it.
+        public static float DescentLift(string sym, float size) => Descends(sym) ? size * 0.17f : 0f;
     }
 }

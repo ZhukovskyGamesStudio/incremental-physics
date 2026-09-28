@@ -9,6 +9,7 @@ Shader "UI/ChalkText"
         _Color ("Tint", Color) = (1,1,1,1)
         _GrainTex ("Chalk Grain (R dust, G edge)", 2D) = "gray" {}
         _GrainPx ("Grain size, atlas pixels", Float) = 1.3
+        _Cut ("Edge threshold", Range(0.05, 0.95)) = 0.5
         _Rag ("Ragged edge", Range(0, 1)) = 0.6
         _Soft ("Edge softness", Range(0.01, 0.5)) = 0.1
         _Dust ("Dust", Range(0, 1)) = 1
@@ -48,7 +49,7 @@ Shader "UI/ChalkText"
         CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma target 2.0
+            #pragma target 3.0
 
             #include "UnityCG.cginc"
             #include "UnityUI.cginc"
@@ -86,7 +87,7 @@ Shader "UI/ChalkText"
             float _UIMaskSoftnessX;
             float _UIMaskSoftnessY;
             int _UIVertexColorAlwaysGammaSpace;
-            half _GrainPx, _Rag, _Soft, _Dust;
+            half _GrainPx, _Cut, _Rag, _Soft, _Dust;
 
             v2f vert(appdata_t v)
             {
@@ -125,12 +126,16 @@ Shader "UI/ChalkText"
                 half4 tex = tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd;
                 half4 n = tex2D(_GrainTex, IN.grain);
 
+                // text drawn smaller than its atlas (the lab map zoomed out) has strokes thinner than a pixel:
+                // the chalk fades out there, or the grain eats the letters whole
+                float2 texel = fwidth(IN.texcoord * _MainTex_TexelSize.zw);
+                half chalk = 1 - saturate((max(texel.x, texel.y) - 1.1) * 1.5);
                 // chalk: the edge sits where the coverage crosses a wandering threshold, a little harder than smooth
-                half t = 0.5 + (n.g - 0.5) * _Rag;
+                half t = lerp(0.3, _Cut + (n.g - 0.5) * _Rag, chalk);
                 half cover = smoothstep(t - _Soft, t + _Soft, tex.a);
                 // dust: some specks are knocked right out, the rest of the stroke is a touch uneven
                 half dust = n.r < 0.2 ? 0.3 : lerp(0.74, 1.0, n.r);
-                cover *= lerp(1.0, dust, _Dust);
+                cover *= lerp(1.0, dust, _Dust * chalk);
 
                 half4 color = IN.color * half4(tex.rgb, cover);
 

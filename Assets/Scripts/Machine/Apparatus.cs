@@ -1124,7 +1124,7 @@ namespace ChalkPhysics
         public static float SampleSize(Sample s) => 28 + 14 * (float)s.volR;
 
 
-        /// Draws a sample exactly the same way everywhere: size hints the volume, hatching (with the trained eye) hints the mass,
+        /// Draws a sample exactly the same way everywhere: size hints the volume, hatching hints the density (the pair: the weight),
         /// ticks on the top edge (with the trained eye) hint the roughness. Golden samples are yellow. rot = tilted (on a thread).
         void DrawSample(ChalkShape S, Sample s, Vector2 c, float alpha = 1f, bool selected = false, float rot = 0f)
         {
@@ -1148,8 +1148,8 @@ namespace ChalkPhysics
             }
         }
 
-        /// Six hatch styles so the specimens in a box are easy to tell apart. Every point goes through the
-        /// same mapping as the outline, so the pattern turns with the specimen.
+        /// Six hatch styles; GameState.HatchFor picks one by the specimen's density, lightest to darkest 5, 3, 4, 1, 0, 2.
+        /// Every point goes through the same mapping as the outline, so the pattern turns with the specimen.
         static void Fill(ChalkShape S, System.Func<Vector2, Vector2> R, float size, int pattern, float sp, Color col)
         {
             float h = size / 2;

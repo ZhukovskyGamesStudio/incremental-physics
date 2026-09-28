@@ -51,7 +51,7 @@ namespace ChalkPhysics
                 d.rectTransform.anchoredPosition = new Vector2(a.x, a.y);
                 Lab.DrawIcon(d, a.icon, faint, a.k);
             }
-            ChalkTex.Math(UIF.Text(_content, "E = m·g·h", 40, new Color(1, 1, 1, 0.12f), new Vector2(-650, 100), new Vector2(400, 60))).transform.localRotation = Quaternion.Euler(0, 0, 6);
+            ChalkTex.Math(UIF.Text(_content, "E = mgh", 40, new Color(1, 1, 1, 0.12f), new Vector2(-650, 100), new Vector2(400, 60))).transform.localRotation = Quaternion.Euler(0, 0, 6);
             ChalkTex.Math(UIF.Text(_content, "T = 2π·√(l/g)", 34, new Color(1, 1, 1, 0.1f), new Vector2(660, 110), new Vector2(420, 60))).transform.localRotation = Quaternion.Euler(0, 0, -5);
             ChalkTex.Math(UIF.Text(_content, "I = U / R", 34, new Color(1, 1, 1, 0.1f), new Vector2(-600, -150), new Vector2(360, 60))).transform.localRotation = Quaternion.Euler(0, 0, 4);
 

@@ -43,7 +43,7 @@ namespace ChalkPhysics
             rt.sizeDelta = new Vector2(TW, TH);
             UIF.Catcher(transform);
             _box = UIF.Shape(transform, id.GetHashCode() & 0xfff, "Box");
-            _sym = ChalkTex.Math(UIF.Text(transform, D.sym, 48, ChalkTex.White, new Vector2(0, alchemy ? 10 : 22), new Vector2(TW + 20, 58)));
+            _sym = ChalkTex.Math(UIF.Text(transform, D.sym, 48, ChalkTex.White, new Vector2(0, (alchemy ? 10 : 22) + ChalkTex.DescentLift(D.sym, 48)), new Vector2(TW + 20, 58)));
             _val = Fit(UIF.Text(transform, "", 20, ChalkTex.Dim, new Vector2(0, alchemy ? -28 : -12), new Vector2(TW - 30, 24)), 12, 20);
             _cost = Fit(UIF.Text(transform, "", 21, ChalkTex.Yellow, new Vector2(0, -33), new Vector2(TW - 48, 22)), 12, 21);
             if (D.openCur == Cur.Obs) { _ink = InkText.On(_cost); _cost.fontSize = Mathf.RoundToInt(18 * ChalkTex.FontScale); }
@@ -105,7 +105,7 @@ namespace ChalkPhysics
                 else
                 {
                     _val.text = G.LetterValue(Id);
-                    SetCost("↑ " + GameState.Fmt(cost));
+                    SetCost("↑ " + GameState.FmtPrice(cost, d.cost));
                     _cost.color = afford ? new Color(cc.r, cc.g, cc.b, 0.75f + 0.25f * Mathf.Sin(Time.time * 5)) : new Color(cc.r, cc.g, cc.b, 0.35f);
                 }
                 _val.color = ChalkTex.Dim;

@@ -31,7 +31,7 @@ namespace ChalkPhysics
         public int id;
         public double massR, volR, mu;  // multipliers of the letters m and V; roughness 0..1
         public bool knowM, knowV, knowMu, golden, knowGold;
-        public int pattern;             // hatch style, so samples are easy to tell apart
+        public int pattern;             // hatch style: the denser the specimen, the more chalk in it (see HatchFor)
         public bool Knows(string prop) => prop == "m" ? knowM : prop == "V" ? knowV : prop == "mu" ? knowMu : true;
         public bool Floats => massR / volR < 1.2;
         public int uses;
@@ -169,7 +169,9 @@ namespace ChalkPhysics
         public bool AnyStation { get { foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0) return true; return false; } }
 
         // ---------------- bench parameters ----------------
-        public int MaxActions { get { int n = BaseActions; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Actions) n += (int)d.value; } return n; } }
+        /// Every experiment found after the first brings one more action with it: a new instrument needs time to try.
+        public int ExperimentActions { get { int n = 0; foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0) n++; return Math.Max(0, n - 1); } }
+        public int MaxActions { get { int n = BaseActions + ExperimentActions; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Actions) n += (int)d.value; } return n; } }
         public double AutoMult { get { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.AutoMult) m *= d.value; } return m; } }
         public double StationMult(string station) { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.StationMult && d.station == station) m *= d.value; } return m; }
         public float SwingPeriod => Mathf.Max(0.3f, (float)V("T"));
@@ -339,16 +341,31 @@ namespace ChalkPhysics
         }
 
         static readonly double[] Ratios = { 0.5, 0.7, 1.0, 1.0, 1.4, 2.0, 3.0 };
+
+        /// The six hatches from the lightest to the darkest (Apparatus.Fill): dots, rows, columns, diagonal, grid,
+        /// grid with a diagonal. With the size showing the volume, the hatch shows the density, so the pair of them
+        /// reads as the weight: a big dark block is heavy, a small dotted one is light.
+        static readonly int[] HatchScale = { 5, 3, 4, 1, 0, 2 };
+        /// Where the density moves to the next hatch; the third step sits on Floats' 1.2, so the three lighter
+        /// hatches always float and the three darker ones always sink.
+        static readonly double[] HatchSteps = { 0.35, 0.7, 1.2, 2.0, 3.5 };
+        public static int HatchFor(Sample s)
+        {
+            double d = s.massR / s.volR;
+            int k = 0;
+            while (k < HatchSteps.Length && d >= HatchSteps[k]) k++;
+            return HatchScale[k];
+        }
         void GenerateSamples()
         {
             Samples.Clear();
             Selected = -1;
             var rnd = new System.Random();
-            int n = SampleCount, shift = rnd.Next(6);
+            int n = SampleCount;
             for (int i = 0; i < n; i++)
             {
                 double heavy = HasPerk("heavy") ? 1.25 : 1;
-                var s = new Sample { id = i, massR = Ratios[rnd.Next(Ratios.Length)] * heavy, volR = Ratios[rnd.Next(Ratios.Length)], mu = System.Math.Round(0.1 + rnd.NextDouble() * 0.8, 2), pattern = (i + shift) % 6 };
+                var s = new Sample { id = i, massR = Ratios[rnd.Next(Ratios.Length)] * heavy, volR = Ratios[rnd.Next(Ratios.Length)], mu = System.Math.Round(0.1 + rnd.NextDouble() * 0.8, 2) };
                 s.golden = rnd.NextDouble() < GoldChance;
                 Samples.Add(s);
             }
@@ -356,6 +373,7 @@ namespace ChalkPhysics
             Samples[rnd.Next(n)].massR = 3.0 * (HasPerk("heavy") ? 1.25 : 1);
             int light = rnd.Next(n);
             if (Samples[light].massR < 3.0) Samples[light].massR = 0.5;
+            foreach (var s in Samples) s.pattern = HatchFor(s);     // once the masses are final
             if (HasPerk("autoweigh")) foreach (var s in Samples) s.knowM = true;
         }
 
@@ -442,6 +460,9 @@ namespace ChalkPhysics
             if (key.StartsWith("L:")) return Known.Contains(key.Substring(2)) && Lessons > 0;
             return Built(key) && Lessons > (BuiltAt.TryGetValue(key, out var l) ? l : 0);
         }
+
+        /// An early perk waits only for its formula; everything else waits for its whole branch.
+        public bool PerkOpen(PerkDef p) => ChainOpen(p.requires) || (p.early && !p.requires.StartsWith("L:") && Built(p.requires));
 
         /// Nothing to upgrade yet: devices, perks and letter levels all wait for the very first joules (from the shelf),
         /// so a new player meets one thing at a time.
@@ -531,8 +552,10 @@ namespace ChalkPhysics
         public void Discover(FormulaDef f)
         {
             if (Built(f.id)) return;
+            int before = ExperimentActions;
             Proven.Add(f.id);
             BuiltAt[f.id] = Lessons;
+            if (Phase == Phase.Lesson) ActionsLeft += ExperimentActions - before;   // found mid-experiment: the action is there at once
             foreach (var o in f.outputs) AddKnown(o);
             if (f.kind == FKind.Final) Won = true;
             FormulaProven?.Invoke(f.id);
@@ -561,7 +584,7 @@ namespace ChalkPhysics
         public bool BuyPerk(string id)
         {
             var p = Defs.Pk(id);
-            if (p == null || Perks.Contains(id) || p.domain > Era || !ChainOpen(p.requires) || Cur[(int)p.cost] < p.price) return false;
+            if (p == null || Perks.Contains(id) || p.domain > Era || !PerkOpen(p) || Cur[(int)p.cost] < p.price) return false;
             Cur[(int)p.cost] -= p.price;
             Perks.Add(id);
             PerkBought?.Invoke(id);
@@ -696,10 +719,12 @@ namespace ChalkPhysics
             return (Math.Abs(v) >= 1e4 ? Fmt(v) : v.ToString(d.fmt)) + (d.unit.Length > 0 ? " " + d.unit : "");
         }
 
+        /// A formula as it is written on the board: letters side by side, no multiplication dots (in chalk they are
+        /// specks too small to read), so E = mgh, not E = m·g·h.
         public static string Symbolic(FormulaDef f)
         {
             var sb = new System.Text.StringBuilder();
-            foreach (var p in f.parts) sb.Append(p.StartsWith("{") ? Defs.L(p.Substring(1, p.Length - 2)).sym : p);
+            foreach (var p in f.parts) sb.Append(p.StartsWith("{") ? Defs.L(p.Substring(1, p.Length - 2)).sym : p.Replace("·", ""));
             return sb.ToString();
         }
     }

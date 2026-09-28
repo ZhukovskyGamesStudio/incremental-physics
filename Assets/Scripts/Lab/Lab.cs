@@ -26,12 +26,15 @@ namespace ChalkPhysics
         readonly Text[] _cur = new Text[4];
         Text _hint, _startText, _alchText, _tipTitle, _tipBody, _tipStat;
         InkText _tipInk;
-        RectTransform _startBtn, _alchBtn, _tip, _hintBack, _startBack, _alchBack;
+        RectTransform _startBtn, _alchBtn, _tip, _hintBack, _startBack, _alchBack, _top, _topBack;
+        ChalkShape _topBox;
+        float _topRight;
         ChalkShape _edges, _startBox, _alchBox, _tipBox, _curIcons;
         string _treeKey;
         Vector2 _pan, _panTarget;
         float _hintT, _startShake, _alchShake, _tipW, _tipH, _minX, _maxX, _minY, _maxY;
         float _zoom = 1, _zoomT = 1;                          // the map's own zoom (mouse wheel)
+        bool _userZoomed;                                     // once the player has used the wheel, the zoom is theirs
         readonly double[] _shownCur = new double[4], _curTarget = new double[4];   // counters tick up to their value
         readonly float[] _curFlash = new float[4];
         bool _panning, _tipOn;
@@ -56,22 +59,25 @@ namespace ChalkPhysics
 
             // dark backing under the fixed HUD so map nodes never bleed through it
             var bc = new Color(0.105f, 0.14f, 0.125f, 0.9f);
-            Backing(Content, new Vector2(0, 500), new Vector2(LW, 80), bc);
-            _startBack = Backing(Content, new Vector2(720, -460), new Vector2(420, 96), bc);
-            _alchBack = Backing(Content, new Vector2(-720, -460), new Vector2(420, 96), bc);
             _hintBack = Backing(Content, new Vector2(0, -500), new Vector2(1000, 52), bc);
 
-            UIF.Text(Content, "Лаборатория", 46, ChalkTex.White, new Vector2(-700, 500), new Vector2(460, 60), TextAnchor.MiddleLeft);
-            var ul = UIF.Shape(Content, 12);
+            // the title and the counters hang from the top edge of the screen, on a backing in a faint frame
+            _top = UIF.Rect("Top", Content, Vector2.zero, Vector2.zero);
+            _topBack = Backing(_top, Vector2.zero, Vector2.zero, bc);
+            _topBox = UIF.Shape(_top, 14, "TopFrame");
+            UIF.Text(_top, "Лаборатория", 46, ChalkTex.White, new Vector2(-700, 500), new Vector2(460, 60), TextAnchor.MiddleLeft);
+            var ul = UIF.Shape(_top, 12);
             ul.Line(new Vector2(-930, 470), new Vector2(-630, 472), ChalkTex.White, 3f);
             for (int i = 0; i < 4; i++)
-                _cur[i] = UIF.Text(Content, "", 34, Apparatus.CurColor(i), Vector2.zero, new Vector2(250, 60));
-            _curIcons = UIF.Shape(Content, 13, "CurIcons");
+                _cur[i] = UIF.Text(_top, "", 34, Apparatus.CurColor(i), Vector2.zero, new Vector2(250, 60));
+            _curIcons = UIF.Shape(_top, 13, "CurIcons");
 
             _hint = UIF.Text(Content, "", 28, ChalkTex.Cyan, new Vector2(0, -500), new Vector2(980, 56));
 
             _startBtn = UIF.Rect("Start", Content, new Vector2(720, -460), new Vector2(400, 84));
             UIF.Catcher(_startBtn);
+            // the backing sits just inside the chalk frame (as under the tooltip) and grows with the button on hover
+            _startBack = Backing(_startBtn, Vector2.zero, new Vector2(386, 70), bc);
             _startBox = UIF.Shape(_startBtn, 60);
             _startText = LetterTile.Fit(UIF.Text(_startBtn, "", 36, ChalkTex.Yellow, Vector2.zero, new Vector2(380, 46)), 22, 36);
             var sc = _startBtn.gameObject.AddComponent<Clickable>();
@@ -80,6 +86,7 @@ namespace ChalkPhysics
 
             _alchBtn = UIF.Rect("Alchemy", Content, new Vector2(-720, -460), new Vector2(400, 84));
             UIF.Catcher(_alchBtn);
+            _alchBack = Backing(_alchBtn, Vector2.zero, new Vector2(386, 70), bc);
             _alchBox = UIF.Shape(_alchBtn, 61);
             _alchText = UIF.Text(_alchBtn, "⚗ Теории", 36, ChalkTex.Cyan, Vector2.zero, new Vector2(400, 80));
             var ac = _alchBtn.gameObject.AddComponent<Clickable>();
@@ -287,6 +294,12 @@ namespace ChalkPhysics
                 if (_everBuilt && !wide) _wide = false;
                 if (wide) _wide = true;
                 _slotCount = count;
+                if (!_wide && !_userZoomed)
+                {   // a young tree is shown up close: the first letter is big on the screen, and the camera steps
+                    // back bit by bit as the tree grows, until at five nodes it is at the usual distance
+                    _zoomT = Mathf.Lerp(1.6f, 1f, Mathf.Clamp01((count - 1) / 4f));
+                    if (!_everBuilt) _zoom = _zoomT;
+                }
                 if (_everBuilt) FocusFrontier();
             }
             _everBuilt = true;
@@ -306,8 +319,9 @@ namespace ChalkPhysics
         /// A node's upgrades (a formula's devices and perks, a letter's tricks), one node at a time in a straight line.
         void BuildChain(string key, Vector2 origin, float originR, Vector2 dir, int max)
         {
-            if (!G.ChainOpen(key)) return;
             var chain = Chain(key);
+            if (!G.ChainOpen(key)) chain.RemoveAll(it => it.perk == null || !G.PerkOpen(it.perk));   // only the early ones so far
+            if (chain.Count == 0) return;
             Vector2 from = origin; float fromR = originR;
             for (int i = 0; i < chain.Count && i < max; i++)
             {
@@ -614,7 +628,7 @@ namespace ChalkPhysics
             // a device that runs an instrument by itself carries a little gear in the corner
             if (d.automates != null) DrawIcon(ic, "gear", new Color(icol.r, icol.g, icol.b, icol.a * 0.55f), 0.3f, new Vector2(24, -16));
             var price = UIF.Text(rt, "", 17, have ? ChalkTex.Green : cc, new Vector2(0, -26), new Vector2(SMALL - 8, 22));
-            InkText.On(price).Set(have ? "✓" : (d.cost == Cur.Obs ? GameState.FmtPrice(d.price, Cur.Obs) : GameState.Fmt(d.price)), cc);
+            InkText.On(price).Set(have ? "✓" : GameState.FmtPrice(d.price, d.cost), cc);
             rt.gameObject.AddComponent<BuyNodeView>().Init(box, price, () => G.Cur[(int)d.cost] >= d.price, have, cc, new Vector2(SMALL - 6, SMALL - 6));
             var c = rt.gameObject.AddComponent<Clickable>();
             c.onClick = () =>
@@ -748,6 +762,21 @@ namespace ChalkPhysics
             _tipBox.Rect(Vector2.zero, new Vector2(_tipW - 4, _tipH - 4), ChalkTex.White, 2.5f);
         }
 
+        /// The top panel from the left edge to just past the last counter: its top runs off the screen, so only the
+        /// sides and the bottom are drawn, in a faint line that frames it without catching the eye.
+        void LayoutTop(float r)
+        {
+            if (Mathf.Approximately(r, _topRight)) return;
+            _topRight = r;
+            float l = -LW / 2 - 600, t = LH / 2 + 80, b = 454;     // far past the left edge: wide screens letterbox sideways too
+            _topBack.anchoredPosition = new Vector2((l + r) / 2, (t + b) / 2);
+            _topBack.sizeDelta = new Vector2(r - l - 4, t - b - 4);
+            var c = new Color(1, 1, 1, 0.22f);
+            _topBox.Clear();
+            _topBox.Line(new Vector2(l + 2, b), new Vector2(r, b), c, 2f);
+            _topBox.Line(new Vector2(r, b), new Vector2(r, t), c, 2f);
+        }
+
         /// A flat board-coloured rectangle (UGUI Image) that hides whatever is drawn under it.
         public static RectTransform Backing(Transform parent, Vector2 pos, Vector2 size, Color c)
         {
@@ -837,6 +866,7 @@ namespace ChalkPhysics
                 if (Mathf.Abs(sc) > 0.01f)
                 {
                     float old = _zoomT;
+                    _userZoomed = true;
                     _zoomT = Mathf.Clamp(_zoomT * (sc > 0 ? 1.15f : 1f / 1.15f), 0.35f, 1.6f);
                     if (Mathf.Abs(old - _zoomT) > 1e-4f)
                     {
@@ -852,7 +882,13 @@ namespace ChalkPhysics
             _pan = Vector2.Lerp(_pan, _panTarget, dt * 6f);
             _board.anchoredPosition = _pan;
 
+            // on a screen taller than 16:9 the layout is letterboxed; the top panel still sits on the very edge
+            {
+                float sc = Content.localScale.y, rh = ((RectTransform)transform).rect.height;
+                _top.anchoredPosition = new Vector2(0, sc > 0 ? Mathf.Max(0, (rh / sc - LH) / 2) : 0);
+            }
             int shown = 0;
+            float right = -600;
             _curIcons.Clear();
             for (int i = 0; i < 4; i++)
             {
@@ -875,8 +911,10 @@ namespace ChalkPhysics
                 _cur[i].text = GameState.FmtCur(_shownCur[i], (Cur)i);
                 // the bulb goes after this frame's number, as wide as it is drawn right now (it jumps when it grows)
                 if (bulb) DrawIcon(_curIcons, "bulb", ChalkTex.Cyan, 0.95f, new Vector2(cx + shift + _cur[i].preferredWidth * _cur[i].transform.localScale.x / 2 + 28, 501));
+                right = Mathf.Max(right, cx + shift + _cur[i].preferredWidth / 2 + (bulb ? 50 : 0));
                 shown++;
             }
+            LayoutTop(Mathf.Ceil((right + 36) / 40f) * 40f);
 
             // the buttons exist only once there is something behind them: no greyed-out promises
             _startShake = Mathf.Max(0, _startShake - Time.deltaTime * 3);
