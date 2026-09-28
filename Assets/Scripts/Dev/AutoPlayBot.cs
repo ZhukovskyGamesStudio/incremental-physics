@@ -177,22 +177,23 @@ namespace ChalkPhysics
                 G.OpenLetter(open);
             }
             foreach (var g in Defs.Gates) if (G.CanBuyGate(g.id)) G.BuyGate(g.id);
-            // observations: the cheapest perks and devices on the map, a few per break
-            for (int buys = 0; buys < 3; buys++)
-            {
-                var perk = Defs.Perks.Where(p => !G.HasPerk(p.id) && p.cost == Cur.Obs && G.ChainOpen(p.requires) && p.domain <= G.Era).OrderBy(p => p.price).FirstOrDefault();
-                var dev = G.AvailableDevices().Where(d => G.ChainOpen(d.requires)).OrderBy(d => d.price).FirstOrDefault();
-                double obs = G.Cur[(int)Cur.Obs];
-                if (perk != null && (dev == null || perk.price <= dev.price) && obs >= perk.price) { G.BuyPerk(perk.id); Log("perk " + perk.id); }
-                else if (dev != null && obs >= dev.price) { G.BuyDevice(dev.id); Log("device " + dev.id); }
-                else break;
-            }
-            // a teaser priced in another coin, once that coin exists
+            // upgrades, in each coin: ideas buy the cheapest few; joules buy a machine only while it costs at most half the
+            // wallet, since the rest goes to letter levels
+            foreach (var coin in new[] { Cur.Obs, Cur.J, Cur.C, Cur.Cal })
+                for (int buys = 0; buys < 3; buys++)
+                {
+                    var perk = Defs.Perks.Where(p => !G.HasPerk(p.id) && p.cost == coin && !p.Teaser && G.PerkOpen(p) && p.domain <= G.Era).OrderBy(p => p.price).FirstOrDefault();
+                    var dev = G.AvailableDevices().Where(d => d.cost == coin && G.ChainOpen(d.requires)).OrderBy(d => d.price).FirstOrDefault();
+                    double have = G.Cur[(int)coin] * (coin == Cur.Obs ? 1 : 0.5);
+                    if (perk != null && (dev == null || perk.price <= dev.price) && have >= perk.price) { G.BuyPerk(perk.id); Log("perk " + perk.id); }
+                    else if (dev != null && have >= dev.price) { G.BuyDevice(dev.id); Log("device " + dev.id); }
+                    else break;
+                }
             foreach (var p in Defs.Perks)
-                if (p.cost != Cur.Obs && !G.HasPerk(p.id) && p.domain <= G.Era && G.ChainOpen(p.requires) && G.Cur[(int)p.cost] >= p.price * 3) { G.BuyPerk(p.id); Log("perk " + p.id); }
+                if (p.Teaser && !G.HasPerk(p.id) && p.domain <= G.Era && G.ChainOpen(p.requires) && G.Cur[(int)p.cost] >= p.price * 3) { G.BuyPerk(p.id); Log("perk " + p.id); }
             // levels: spend a share of the joules, saving up when something big is on the map
             double reserve = 0;
-            foreach (var l in Defs.Letters) if (!G.Known.Contains(l.id) && !l.Derived && l.openCur == Cur.J && G.NodeVisible("L:" + l.id)) reserve = System.Math.Max(reserve, l.openCost);
+            foreach (var l in Defs.Letters) if (!G.Known.Contains(l.id) && !l.Derived && l.openCur == Cur.J && G.NodeVisible("L:" + l.id)) reserve = System.Math.Max(reserve, G.OpenCost(l.id));
             if (G.RevolutionOffered) reserve = System.Math.Max(reserve, G.NextRevolution.cost);
             BuyLetters(reserve > 0 ? 0.5 : 0.7, reserve);
         }

@@ -17,29 +17,18 @@ namespace ChalkPhysics
 
         const float Floor = -150;       // lower bench
         const float Shelf2 = 330;       // upper bench
-        // the box of samples: under the bench, or — while the bench of the first epoch holds only one or two
-        // instruments — right on the table beside them, so the camera can come close and the first instrument is big
-        bool TrayOnTable { get { if (G.Revolutions > 0) return false; int n = 0; foreach (var kv in O) if (StationBuilt(kv.Key)) n++; return n <= 2; } }
-        float TrayY => TrayOnTable ? Floor + 44 : -262;
-        float TrayX
-        {
-            get
-            {
-                if (!TrayOnTable) return 0;
-                float left = 1e9f;
-                foreach (var kv in O) if (StationBuilt(kv.Key)) left = Mathf.Min(left, StationRect(kv.Key).xMin);
-                if (left > 1e8f) left = 0;
-                int n = Mathf.Max(1, G.Samples.Count);
-                return left - 110 - ((n - 1) / 2f * 120f + 70);
-            }
-        }
+        // the box of samples stands on the table in the middle of the bench, right beside the instruments
+        const float TrayX = 0, BoxPitch = 100;
+        float TrayY => Floor + 44;
 
-        // instruments alternate right / left of the centre in the order they are discovered
-        static readonly Dictionary<string, Vector2> O = new Dictionary<string, Vector2>
+        // the lower bench: its instruments stand around the box, right and left in turn, in the order they are
+        // discovered (Layout); the upper bench keeps its places
+        static readonly string[] Lower = { "dyna", "fall", "spring", "pend", "arch", "density", "slide", "friction", "fly" };
+        readonly Dictionary<string, Vector2> O = new Dictionary<string, Vector2>
         {
-            { "dyna", new Vector2(0, Floor) }, { "fall", new Vector2(250, Floor) }, { "spring", new Vector2(-230, Floor) },
-            { "pend", new Vector2(530, Floor) }, { "arch", new Vector2(-560, Floor) }, { "density", new Vector2(850, Floor) },
-            { "slide", new Vector2(-800, Floor) }, { "friction", new Vector2(1080, Floor) }, { "fly", new Vector2(-1060, Floor) },
+            { "dyna", new Vector2(0, Floor) }, { "fall", new Vector2(0, Floor) }, { "spring", new Vector2(0, Floor) },
+            { "pend", new Vector2(0, Floor) }, { "arch", new Vector2(0, Floor) }, { "density", new Vector2(0, Floor) },
+            { "slide", new Vector2(0, Floor) }, { "friction", new Vector2(0, Floor) }, { "fly", new Vector2(0, Floor) },
             // the upper bench: the circuit in the middle (it grows both ways), the steam instruments on either side
             { "stand", new Vector2(0, Shelf2) },
             { "heater", new Vector2(560, Shelf2) }, { "engine", new Vector2(860, Shelf2) }, { "piston", new Vector2(1190, Shelf2) },
@@ -48,13 +37,38 @@ namespace ChalkPhysics
         // what each instrument occupies, relative to its origin (x, y, width, height)
         static readonly Dictionary<string, Rect> Extent = new Dictionary<string, Rect>
         {
-            { "fall", new Rect(-120, -20, 270, 440) }, { "dyna", new Rect(-70, 0, 140, 340) }, { "spring", new Rect(-60, 0, 120, 310) },
+            { "fall", new Rect(-125, -20, 180, 440) }, { "dyna", new Rect(-70, 0, 140, 340) }, { "spring", new Rect(-60, 0, 120, 310) },
             { "pend", new Rect(-80, 0, 240, 350) }, { "arch", new Rect(-80, -10, 280, 250) }, { "density", new Rect(-80, 0, 160, 230) },
             { "slide", new Rect(-100, 0, 230, 170) }, { "friction", new Rect(-90, 0, 200, 170) }, { "fly", new Rect(-100, 0, 230, 250) },
             { "stand", new Rect(-250, 0, 500, 240) },   // the circuit grows: see StationRect
             { "heater", new Rect(-150, 0, 240, 240) }, { "calor", new Rect(-80, 0, 170, 240) }, { "engine", new Rect(-100, 0, 340, 210) },
             { "ice", new Rect(-100, 0, 230, 180) }, { "piston", new Rect(-50, 0, 120, 210) },
         };
+
+        string _layoutKey;
+        /// Places the built instruments of the lower bench around the box: the first to its right, the next to its left,
+        /// and so on, each at a small gap from its neighbour. Changes only between runs (new instruments, a bigger box).
+        void Layout()
+        {
+            int n = Mathf.Max(1, Mathf.Min(PerRow, G.Samples.Count));
+            var key = new System.Text.StringBuilder(n + ":");
+            foreach (var st in Lower) if (StationBuilt(st)) key.Append(st).Append(',');
+            if (key.ToString() == _layoutKey) return;
+            _layoutKey = key.ToString();
+            const float Gap = 50;
+            float half = (n - 1) / 2f * BoxPitch + 70;
+            float right = TrayX + half + Gap, left = TrayX - half - Gap;
+            int k = 0;
+            foreach (var st in Lower)
+            {
+                var e = Extent[st];
+                if (!StationBuilt(st)) { O[st] = new Vector2(right + 2000, Floor); continue; }
+                if (k++ % 2 == 0) { O[st] = new Vector2(right - e.x, Floor); right += e.width + Gap; }
+                else { O[st] = new Vector2(left - (e.x + e.width), Floor); left -= e.width + Gap; }
+            }
+            _benchLeft = left; _benchRight = right;
+        }
+        float _benchLeft = -700, _benchRight = 700;
 
         class Flight { public float t; public Sample s; public int count = 1; }
         class Station
@@ -80,7 +94,11 @@ namespace ChalkPhysics
         int _pending;                            // actions reserved by samples on their way to an instrument
 
         ChalkShape _ground, _static, _dyn, _hud, _tray;
-        Text _hudText, _ghostText, _launchText, _censusText, _thermoText;
+        Text _hudText, _ghostText, _launchText, _censusText, _thermoText, _densText;
+        int _densLit;                            // divisions of the measuring cylinder lit so far (for the clicks)
+        float _trapdoor;                         // the shelf's trapdoor: 0 shut .. 1 hanging open
+        float _sinceStart;                       // seconds since this run began (the new instruments get circled)
+        readonly Dictionary<string, float> _circle = new Dictionary<string, float>();   // how much of each circle is left (1 → 0 once tried)
         readonly Text[] _earn = new Text[4];     // what the run has brought, one counter per currency
         readonly float[] _earnFl = new float[4];
         readonly string[] _earnStr = { "", "", "", "" };
@@ -114,6 +132,7 @@ namespace ChalkPhysics
         static readonly Sample Probe = new Sample { volR = 1 };
 
         float _pendAmp, _pendPhase, _pendAngle, _prevAngle; bool _lastRising; int _swingsLeft;
+        double _pendCarry;                       // the fraction of a swing a push left over, paid with the next one
         float _wheelAngle, _engineAngle, _engineSpeed;
 
         GameState G => GameState.I;
@@ -167,6 +186,7 @@ namespace ChalkPhysics
             }
             _hints["tray"] = UIF.Text(Content, "", 26, ChalkTex.Cyan, Vector2.zero, new Vector2(520, 36));
             _thermoText = UIF.Text(Content, "", 22, new Color(1f, 0.55f, 0.4f, 1f), Vector2.zero, new Vector2(120, 30));
+            _densText = UIF.Text(Content, "", 22, ChalkTex.Cyan, Vector2.zero, new Vector2(200, 30));
             _ghost = UIF.Rect("Ghost", Content, Vector2.zero, new Vector2(80, 80));
             _ghostShape = UIF.Shape(_ghost, 99);
             _ghostText = UIF.Text(_ghost, "", 18, ChalkTex.White, new Vector2(0, -58), new Vector2(220, 24));
@@ -203,11 +223,12 @@ namespace ChalkPhysics
                 for (int i = 0; i < 3; i++) { s.sockets[i] = null; s.sockIn[i] = null; }
             }
             _bath.Reset(); _cyl.Reset(); _pot.Reset(); _cal.Reset(); _melt.Reset();
+            _sinceStart = 0; _circle.Clear();
             _iceDent = 0; _iceMelt = 0; _meltLevel = 0; _dragSocket = -1;
             _runBy.Clear();
             HideSummary();
             _dragSample = -1; _dragging = false; _ghost.gameObject.SetActive(false);
-            _pendAmp = 0; _pendAngle = 0; _prevAngle = 0; _swingsLeft = 0; _pendHang = 0;
+            _pendAmp = 0; _pendAngle = 0; _prevAngle = 0; _swingsLeft = 0; _pendHang = 0; _pendCarry = 0;
             _camSnap = true;
             _bellPending = false; _summaryShown = false; _bellWait = 0;
         }
@@ -265,6 +286,7 @@ namespace ChalkPhysics
             foreach (var t in _hints.Values) t.transform.localScale = inv;
             foreach (var t in _sampleTexts) t.transform.localScale = inv;
             _thermoText.transform.localScale = inv;
+            _densText.transform.localScale = inv;
         }
 
         // ---------------- actions ----------------
@@ -280,7 +302,7 @@ namespace ChalkPhysics
             var o = O[st]; float w = SampleSize(s);
             switch (st)
             {
-                case "fall": return new Vector2(o.x + 12, ShelfY + w / 2);
+                case "fall": return new Vector2(o.x - 10, ShelfY + w / 2);        // on the trapdoor
                 case "dyna": return o + new Vector2(0, 104 - w / 2);
                 case "spring": return o + new Vector2(0, 118 + w / 2);
                 case "pend": return PendPivot + new Vector2(0, -(PendLen + w / 2));
@@ -303,7 +325,7 @@ namespace ChalkPhysics
             var o = O[st]; float w = SampleSize(s);
             switch (st)
             {
-                case "fall": return new Vector2(o.x + 74, Floor + w / 2);
+                case "fall": return new Vector2(o.x - 10, Floor + w / 2);         // straight under it
                 case "arch": return o + new Vector2(60, s.Floats ? 95 + w * 0.5f - w * FloatDepth(s) : 12 + w / 2);
                 case "calor": return o + new Vector2(-4, 14 + w / 2);
                 case "density": return o + new Vector2(0, 34 + w / 2);
@@ -606,9 +628,14 @@ namespace ChalkPhysics
                         if (sample == null) return false;
                         if (s.resident != sample && s.sample != sample) _pendHang = 0;   // a fresh specimen is interesting again
                         if (manual) { s.sample = sample; _pendHang = 0; }
+                        // swings the last push has not played out yet are paid now: a push is worth the same however fast
+                        // the player clicks
+                        var was = s.sample ?? s.resident;
+                        for (; _swingsLeft > 0; _swingsLeft--) Fire("pend", PendPivot + PendDir * PendLen + new Vector2(0, -40), was, G.PendFatigue(_pendHang));
                         _pendAmp = 0.18f + 0.37f * (float)G.PendFatigue(_pendHang);   // the less it gives, the smaller it swings
                         _pendPhase = 0; _prevAngle = _pendAmp; _lastRising = false;
-                        _swingsLeft = 3 + (G.HasPerk("swings") ? 2 : 0);
+                        _pendCarry += G.PendSwings;
+                        _swingsLeft = (int)_pendCarry; _pendCarry -= _swingsLeft;
                         Sfx.Play("whoosh", manual ? 0.4f : 0.25f, 1.4f);
                         return true;
                     }
@@ -732,7 +759,7 @@ namespace ChalkPhysics
             if (In("spring", -60, 60, 0, 200)) return "spring";
             if (In("arch", -80, 200, -10, 240)) return "arch";
             if (In("density", -80, 80, 0, 220)) return "density";
-            if (In("fall", -120, 130, -20, 440)) return "fall";
+            if (In("fall", -125, 55, -20, 440)) return "fall";
             return null;
         }
 
@@ -839,8 +866,10 @@ namespace ChalkPhysics
         void Update()
         {
             float dt = Time.deltaTime;
+            _sinceStart += dt;
+            Layout();
             UpdateCamera(dt);
-            string key = $"{G.Proven.Count}|{G.V("h")}|{G.V("l")}|{G.Revolutions}|{G.Devices.Count}|{G.Perks.Count}";
+            string key = $"{G.Proven.Count}|{G.V("h")}|{G.V("l")}|{G.Revolutions}|{G.Devices.Count}|{G.Perks.Count}|{_layoutKey}";
             if (key != _staticKey) { _staticKey = key; DrawStatic(); }
 
             foreach (var s in _st.Values)
@@ -873,9 +902,9 @@ namespace ChalkPhysics
                     {
                         var fl = s.flights[i];
                         s.flights.RemoveAt(i);
-                        for (int k = 0; k < fl.count; k++) Fire("fall", new Vector2(O["fall"].x + 60, Floor + 40), fl.s);
+                        for (int k = 0; k < fl.count; k++) Fire("fall", new Vector2(O["fall"].x - 10, Floor + 40), fl.s);
                         Sfx.Play("thud", 0.35f, 1f, 0.15f, 0.06f);
-                        FX.I.Dust(Content, new Vector2(O["fall"].x + 60, Floor), ChalkTex.White, 4, 100f, 0.8f);
+                        FX.I.Dust(Content, new Vector2(O["fall"].x - 10, Floor), ChalkTex.White, 4, 100f, 0.8f);
                         if (fl.s != null && _busy.TryGetValue(fl.s, out var where) && where == "fall")
                         {
                             if (G.Automated("fall")) { var smp = fl.s; Fly(smp, ReleasePos("fall", smp), LandingPos("fall", smp), "fall", tr => { if (_busy.TryGetValue(smp, out var w2) && w2 == "fall") s.resident = smp; }); }
@@ -1120,6 +1149,8 @@ namespace ChalkPhysics
             if (s.anim >= 1) { s.anim = 0; Release(s); }
         }
 
+        static string Divisions(int n) { int a = n % 100, b = n % 10; return a >= 11 && a <= 14 ? "делений" : b == 1 ? "деление" : b >= 2 && b <= 4 ? "деления" : "делений"; }
+
         // ---------------- samples ----------------
         public static float SampleSize(Sample s) => 28 + 14 * (float)s.volR;
 
@@ -1138,7 +1169,7 @@ namespace ChalkPhysics
             Fill(S, R, w - 8, s.pattern, 9f, new Color(col.r, col.g, col.b, 0.45f * alpha));
             if (s.knowMu)
             {
-                int ticks = Mathf.RoundToInt((float)s.mu * 8);
+                int ticks = Mathf.RoundToInt((float)s.mu * 4);   // 2, 4 or 8 ticks
                 for (int i = 0; i < ticks; i++) { float x = -h + 6 + i * (w - 12) / 8f; S.Poly(new[] { R(new Vector2(x, h)), R(new Vector2(x + 3, h + 5)) }, col, 1.8f, false, false); }
             }
             if (selected)
@@ -1228,7 +1259,7 @@ namespace ChalkPhysics
             int n = Mathf.Max(1, G.Samples.Count);
             int row = i / PerRow, inRow = Mathf.Min(PerRow, n - row * PerRow), col = i % PerRow;
             float w = i >= 0 && i < G.Samples.Count ? SampleSize(G.Samples[i]) : 42f;
-            return new Vector2(TrayX + (col - (inRow - 1) / 2f) * 120f, TrayFloor(row) + w / 2 + 3);
+            return new Vector2(TrayX + (col - (inRow - 1) / 2f) * BoxPitch, TrayFloor(row) + w / 2 + 3);
         }
 
         void DrawTray()
@@ -1268,16 +1299,7 @@ namespace ChalkPhysics
                 if (!away)
                 {
                     DrawSample(_tray, s, c, 1f, false);
-                    if (s.golden && (s.knowGold || G.HasPerk("shine")))
-                    {   // a golden one twinkles
-                        for (int k = 0; k < 3; k++)
-                        {
-                            float a = Time.time * 1.3f + k * 2.1f; float r = SampleSize(s) / 2 + 12 + 3 * Mathf.Sin(Time.time * 4 + k);
-                            var p = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
-                            var yc = new Color(1f, 0.84f, 0.32f, 0.5f + 0.5f * Mathf.Sin(Time.time * 6 + k * 2));
-                            _tray.Line(p + new Vector2(-4, 0), p + new Vector2(4, 0), yc, 2f); _tray.Line(p + new Vector2(0, -4), p + new Vector2(0, 4), yc, 2f);
-                        }
-                    }
+                    if (s.golden && (s.knowGold || G.HasPerk("shine"))) Glint(_tray, c, SampleSize(s) / 2, i);
                 }
                 else
                 {   // an empty slot: the sample is out on the bench
@@ -1291,7 +1313,7 @@ namespace ChalkPhysics
                 bool massHere = G.Built("dyna") || G.Built("calm");                     // something on this bench can weigh it
                 string m = s.knowM ? "<color=#8CFF99>" + GameState.FmtValue("m", G.V("m") * s.massR) + "</color>" : massHere ? "m?" : "";
                 string v = s.knowV ? "<color=#8CFF99>" + GameState.FmtValue("V", G.V("V") * s.volR) + "</color>" : (G.Built("arch") ? "V?" : "");
-                string mu = s.knowMu ? "<color=#8CFF99>μ " + s.mu.ToString("0.00") + "</color>" : (G.Built("slide") ? "μ?" : "");
+                string mu = s.knowMu ? "<color=#8CFF99>μ " + s.mu.ToString("0.#") + "</color>" : (G.Built("slide") ? "μ?" : "");
                 var t = _sampleTexts[i];
                 // two short lines under the box floor, so the labels never run into each other when the box is full
                 t.rectTransform.anchoredPosition = new Vector2(c.x, TrayFloor(i / PerRow) - 26);
@@ -1309,7 +1331,7 @@ namespace ChalkPhysics
                 var parts = new List<string>();
                 if (gsm.knowM || G.Built("dyna") || G.Built("calm")) parts.Add(gsm.knowM ? GameState.FmtValue("m", G.V("m") * gsm.massR) : "m?");
                 if (G.Built("arch")) parts.Add(gsm.knowV ? GameState.FmtValue("V", G.V("V") * gsm.volR) : "V?");
-                if (G.Built("slide")) parts.Add(gsm.knowMu ? "μ " + gsm.mu.ToString("0.00") : "μ?");
+                if (G.Built("slide")) parts.Add(gsm.knowMu ? "μ " + gsm.mu.ToString("0.#") : "μ?");
                 _ghostText.text = string.Join(" · ", parts);
                 _ghostText.transform.localScale = Vector3.one / _zoom;
             }
@@ -1340,6 +1362,28 @@ namespace ChalkPhysics
 
         static void Gear(ChalkShape S, Vector2 c, float r, float angle, Color col) => StationArt.Gear(S, c, r, angle, col);
 
+        /// A golden specimen glints the way shiny things do in drawings: three short strokes off its top corner, and
+        /// every couple of seconds a band of light runs across its face.
+        static void Glint(ChalkShape S, Vector2 c, float h, int i)
+        {
+            var y = ChalkTex.Yellow;
+            float pulse = 0.55f + 0.45f * Mathf.Sin(Time.time * 3f + i);
+            var k = c + new Vector2(h, h);
+            S.Line(k + new Vector2(4, 4), k + new Vector2(11, 11), new Color(y.r, y.g, y.b, pulse), 2.4f);
+            S.Line(k + new Vector2(6, -2), k + new Vector2(14, -1), new Color(y.r, y.g, y.b, pulse * 0.8f), 2f);
+            S.Line(k + new Vector2(-2, 6), k + new Vector2(-1, 14), new Color(y.r, y.g, y.b, pulse * 0.8f), 2f);
+            float t = (Time.time + i * 0.7f) % 2.6f;
+            if (t < 0.5f)
+            {   // the gleam: two parallel strokes along x + y = q, clipped to the face, q sweeping from corner to corner
+                float q0 = Mathf.Lerp(-2 * h, 2 * h, t / 0.5f);
+                for (int j = 0; j < 2; j++)
+                {
+                    float q = q0 - j * 9, x0 = Mathf.Max(-h + 3, q - h + 3), x1 = Mathf.Min(h - 3, q + h - 3);
+                    if (x1 > x0) S.Line(c + new Vector2(x0, q - x0), c + new Vector2(x1, q - x1), new Color(1f, 0.95f, 0.7f, 0.7f - j * 0.3f), 2.2f);
+                }
+            }
+        }
+
         // ---------------- static drawing ----------------
         void DrawStatic()
         {
@@ -1347,7 +1391,7 @@ namespace ChalkPhysics
             S.Clear();
             _ground.Clear();
             var W = ChalkTex.White;
-            _ground.Ground(new Vector2(-1300, Floor), new Vector2(1400, Floor), W, 4f, 10f, 16f);
+            _ground.Ground(new Vector2(Mathf.Min(-700, _benchLeft - 60), Floor), new Vector2(Mathf.Max(700, _benchRight + 60), Floor), W, 4f, 10f, 16f);
             {   // the upper bench spans the instruments that stand on it
                 float x0 = 1e9f, x1 = -1e9f;
                 foreach (var kv in O) if (kv.Value.y == Shelf2 && StationBuilt(kv.Key)) { var r = StationRect(kv.Key); x0 = Mathf.Min(x0, r.xMin - 60); x1 = Mathf.Max(x1, r.xMax + 60); }
@@ -1380,37 +1424,45 @@ namespace ChalkPhysics
             D.Clear();
             var W = ChalkTex.White; var Dim = new Color(1, 1, 1, 0.5f);
 
-            {   // shelf: the sample waits on the edge, then tips over and falls; the pusher's rod shoves it
+            {   // shelf: the specimen waits on a trapdoor in the middle; its two leaves swing down and it drops
+                // straight through, between the legs, to the floor
                 var o = O["fall"]; var s = _st["fall"]; float sy = ShelfY;
-                float rod = 0;
+                float cx = o.x - 10;
+                const float Leaf = 38;                                  // each leaf, from its hinge to the middle
+                bool dropping = false;
+                foreach (var fl in s.flights) if (fl.t >= 0) dropping = true;
+                _trapdoor = Mathf.MoveTowards(_trapdoor, dropping ? 1 : 0, Time.deltaTime * (dropping ? 9f : 4f));
                 if (s.resident != null)
                 {
                     DrawSample(D, s.resident, LandingPos("fall", s.resident));
-                    int extra = G.BallsPerDrop - 1;                    // the stack waiting behind it
-                    for (int i = 1; i <= extra; i++) DrawSample(D, s.resident, LandingPos("fall", s.resident) + new Vector2(-9 * i, 9 * i), 0.35f);
+                    int extra = G.BallsPerDrop - 1;                    // the stack waiting on top of it
+                    for (int i = 1; i <= extra; i++) DrawSample(D, s.resident, LandingPos("fall", s.resident) + new Vector2(0, 9 * i), 0.35f);
                 }
                 foreach (var fl in s.flights)
                 {
                     if (fl.t < 0 || fl.s == null) continue;
                     float w = SampleSize(fl.s);
-                    // pushed along the shelf with growing speed, then it tips over the edge, turning as it falls
-                    if (fl.t < 0.3f) { float k = fl.t / 0.3f; DrawSample(D, fl.s, new Vector2(o.x + 12 + 48 * k * k, sy + w / 2), 1f); rod = Mathf.Max(rod, 48 * k * k + 12 - w / 2 + 60); }
-                    else { float k = (fl.t - 0.3f) / 0.7f; DrawSample(D, fl.s, new Vector2(o.x + 60 + 14 * k, Mathf.Lerp(sy + w / 2, Floor + w / 2, k * k)), 1f, false, -k * 1.5f); }
-                    if (fl.t > 0.26f && fl.t < 0.46f)
-                    {   // a few crumbs break off the edge at the tipping point
-                        float q = (fl.t - 0.26f) / 0.2f;
-                        for (int i = 0; i < 3; i++)
-                        {
-                            var cp = new Vector2(o.x + 38 + i * 5, sy - 2 - q * (14 + i * 6));
-                            D.Line(cp, cp + new Vector2(-3 - i, -4), new Color(1, 1, 1, 0.6f * (1 - q)), 2f);
-                        }
-                    }
+                    // a moment on the opening door, then a free fall that speeds up all the way down
+                    float k = Mathf.Clamp01((fl.t - 0.12f) / 0.88f);
+                    DrawSample(D, fl.s, new Vector2(cx, Mathf.Lerp(sy + w / 2, Floor + w / 2, k * k)), 1f);
                 }
+                if (_trapdoor > 0.05f && _trapdoor < 0.9f && dropping)
+                    for (int i = 0; i < 4; i++)
+                    {   // chalk crumbs shaken off the leaves as they swing open
+                        float q = 1 - _trapdoor, sx = i < 2 ? -1 : 1;
+                        var cp = new Vector2(cx + sx * (6 + (i % 2) * 8), sy - 6 - (1 - q) * (18 + i * 5));
+                        D.Line(cp, cp + new Vector2(sx * 2, -4), new Color(1, 1, 1, 0.55f * q), 2f);
+                    }
+                // the leaves: hinged at the fixed ends of the top, they meet in the middle when shut
+                float ang = _trapdoor * Mathf.PI * 0.47f;
+                var shelfCol = ChalkTex.Cyan; float lw = G.HasPerk("fallx3") ? 6.5f : 4.5f;
+                var hl = new Vector2(cx - Leaf, sy); var hr = new Vector2(cx + Leaf, sy);
+                D.Line(hl, hl + new Vector2(Mathf.Cos(ang), -Mathf.Sin(ang)) * Leaf, shelfCol, lw);
+                D.Line(hr, hr + new Vector2(-Mathf.Cos(ang), -Mathf.Sin(ang)) * Leaf, shelfCol, lw);
                 if (G.Has("hopper"))
-                {
-                    float tip = o.x - 92 + Mathf.Max(20, rod);
-                    D.Line(new Vector2(o.x - 92, sy + 18), new Vector2(tip, sy + 18), W, 3.5f);
-                    D.Line(new Vector2(tip, sy + 8), new Vector2(tip, sy + 28), W, 3.5f);
+                {   // the latch: a little motor behind the shelf, its rod tugs the latch under the left leaf
+                    float tug = 7 * _trapdoor;
+                    D.Line(new Vector2(o.x - 92, sy + 18), new Vector2(hl.x + 6 - tug, sy + 6), W, 3f);
                     Gear(D, new Vector2(o.x - 106, sy + 24), 11, s.gear, Dim);
                 }
             }
@@ -1482,22 +1534,44 @@ namespace ChalkPhysics
                 _bath.Draw(D, o.y + 16, wl, wr);           // drawn over the specimen: what is under water shows through it
             }
             if (StationBuilt("density"))
-            {   // the specimen drops into the cylinder with a splash; the water climbs by its volume, the pointer swings
+            {   // the specimen drops into the cylinder with a splash and the water climbs by exactly its volume, past the
+                // divisions of the scale: every division it passes lights up and clicks, and each one is an idea (n = V / δ)
                 var o = O["density"]; var s = _st["density"];
                 var sample = s.anim > 0 ? s.sample : s.resident;
-                float k = s.anim <= 0 ? (sample != null ? 1 : 0) : Mathf.Min(1, s.anim / 0.4f);
+                float k = s.anim <= 0 ? (sample != null ? 1 : 0) : Mathf.Min(1, s.anim / 0.45f);
                 float w = sample != null ? SampleSize(sample) : 0;
-                float sy = sample != null ? Mathf.Lerp(180, 34 + w / 2, k * k) : 0;
-                bool under = sample != null && o.y + sy - w / 2 < o.y + 98;
-                float level = 70 + (under ? Mathf.Clamp01((o.y + 98 - (o.y + sy - w / 2)) / Mathf.Max(1, w)) * 12 * (float)sample.volR : 0);
-                _cyl.Rest = o.y + 28 + level; _cyl.Left = o.x - 38; _cyl.Right = o.x + 38;
+                const float Base = 60, PerVol = 22, Top = 166;          // water at rest; rise per unit of the specimen's volume
+                float sy = sample != null ? Mathf.Lerp(190, 34 + w / 2, k * k) : 0;
+                float surf = o.y + 28 + Base;
+                bool under = sample != null && o.y + sy - w / 2 < surf;
+                float rise = under ? Mathf.Clamp01((surf - (o.y + sy - w / 2)) / Mathf.Max(1, w)) * PerVol * (float)sample.volR : 0;
+                _cyl.Rest = surf + rise; _cyl.Left = o.x - 38; _cyl.Right = o.x + 38;
                 if (sample != null && s.anim > 0 && !s.splashed && under) { s.splashed = true; _cyl.Splash(o.x, 150f, 14f, 4); Sfx.Play("splash", 0.2f, 1.5f, 0.1f, 0.1f); }
                 if (s.anim <= 0) s.splashed = false;
+                // the scale: one division is δ of the specimen's volume; drawn no closer than 4 px, so a fine scale
+                // draws a stroke for every few divisions (and a longer one every fifth stroke)
+                double perVol = G.V("V") / G.V("dv");                  // divisions per unit of volR
+                float pitch = PerVol / (float)perVol;                   // px per division
+                int group = Mathf.Max(1, Mathf.CeilToInt(4f / Mathf.Max(1e-4f, pitch)));
+                float step = pitch * group;
+                int lit = Mathf.FloorToInt(rise / step + 1e-3f);
+                for (int i = 1; o.y + 28 + Base + i * step < o.y + Top; i++)
+                {
+                    float y = 28 + Base + i * step;
+                    bool on = i <= lit;
+                    D.Line(o + new Vector2(-37, y), o + new Vector2(i % 5 == 0 ? -25 : -30, y), on ? ChalkTex.Cyan : new Color(1, 1, 1, 0.35f), on ? 2.4f : 1.8f);
+                }
+                if (s.anim > 0 && lit > _densLit) Sfx.Play("tick", 0.12f, 1.7f, 0.08f, 0.04f);
+                _densLit = s.anim > 0 ? lit : 0;
                 if (sample != null && k > 0) DrawSample(D, sample, o + new Vector2(0, sy), 1f);
                 _cyl.Draw(D, o.y + 30, y => o.x - 38, y => o.x + 38);
-                float na = Mathf.PI / 2 - (sample != null ? k * 0.9f * (float)sample.massR / 3f : 0) + Mathf.Sin(s.bounce * 12) * 0.2f * s.bounce;
-                D.Line(o + new Vector2(0, 165), o + new Vector2(0, 165) + new Vector2(Mathf.Cos(na), Mathf.Sin(na)) * 13, ChalkTex.Red, 2.5f);
+                // the count: what the water has passed so far, in divisions — the ideas it is worth
+                int passed = sample != null ? Mathf.Min((int)System.Math.Round(perVol * sample.volR), Mathf.FloorToInt(rise / pitch + 1e-3f)) : 0;
+                _densText.gameObject.SetActive(G.Phase == Phase.Lesson && passed > 0);
+                _densText.rectTransform.anchoredPosition = o + new Vector2(0, 190);
+                _densText.text = passed + " " + Divisions(passed);
             }
+            else _densText.gameObject.SetActive(false);
             if (StationBuilt("friction"))
             {   // the sample is pulled to the right by the dynamometer's spring
                 var o = O["friction"]; var s = _st["friction"];
@@ -1768,22 +1842,30 @@ namespace ChalkPhysics
                     DashedBox(D, LandingPos(st, smp), new Vector2(w, w), col);
                 }
             }
-            // an instrument built since the last run is new: a few chalk sparkles over it, no frame
+            // an instrument built since the last run is new: the teacher circles it in chalk, a wobbly loop drawn before
+            // your eyes that overshoots its start the way a hand does; once the instrument has worked in this run, the
+            // loop is wiped back from its end and is gone
             foreach (var kv in O)
             {
                 var f = MainFormula(kv.Key);
                 if (f == null || !G.BuiltAt.TryGetValue(f.id, out var bl) || bl != G.Lessons) continue;
+                float left = _circle.TryGetValue(kv.Key, out var cl) ? cl : 1;
+                if (G.LessonFires.ContainsKey(f.id)) left = Mathf.MoveTowards(left, 0, Time.deltaTime * 1.8f);
+                _circle[kv.Key] = left;
+                float draw = Mathf.Min(Mathf.Clamp01((_sinceStart - 0.5f) / 0.8f), left);
+                if (draw <= 0) continue;
                 var r = StationRect(kv.Key);
-                for (int i = 0; i < 3; i++)
+                int seed = kv.Key.Length * 7 + kv.Key[0];
+                var c = r.center; float rx = r.width / 2 + 30, ry = r.height / 2 + 24;
+                float a0 = 2.3f + (seed % 5) * 0.12f, sweep = Mathf.PI * 2.12f * (1 - (1 - draw) * (1 - draw));
+                var loop = new List<Vector2>();
+                for (int i = 0; i <= 56; i++)
                 {
-                    var p = new Vector2(r.center.x + (i - 1) * 44, r.yMax + 24 + Mathf.Sin(Time.time * 2.5f + i * 1.7f) * 6);
-                    var col = new Color(1f, 0.84f, 0.32f, 0.3f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 2.2f + i * 1.1f)));
-                    float s = 9 - Mathf.Abs(i - 1) * 3, d = s * 0.38f;
-                    D.Line(p + new Vector2(0, -s), p + new Vector2(0, s), col, 2.2f);      // a twinkle: a long axis,
-                    D.Line(p + new Vector2(-s * 0.75f, 0), p + new Vector2(s * 0.75f, 0), col, 2f);
-                    D.Line(p + new Vector2(-d, -d), p + new Vector2(d, d), col, 1.6f);     // and two short diagonals
-                    D.Line(p + new Vector2(-d, d), p + new Vector2(d, -d), col, 1.6f);
+                    float a = a0 + sweep * i / 56f;
+                    float wob = 1 + 0.035f * Mathf.Sin(a * 3 + seed) + 0.03f * (a - a0);
+                    loop.Add(c + new Vector2(Mathf.Cos(a) * rx * wob, Mathf.Sin(a) * ry * wob));
                 }
+                D.Poly(loop, new Color(1f, 0.84f, 0.32f, 0.85f * Mathf.Sqrt(left)), 3f, false, false);
             }
             // samples in flight between the box and the instruments: a quick arc
             foreach (var tr in _transits)

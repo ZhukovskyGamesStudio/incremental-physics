@@ -46,7 +46,7 @@ namespace ChalkPhysics
             _sym = ChalkTex.Math(UIF.Text(transform, D.sym, 48, ChalkTex.White, new Vector2(0, (alchemy ? 10 : 22) + ChalkTex.DescentLift(D.sym, 48)), new Vector2(TW + 20, 58)));
             _val = Fit(UIF.Text(transform, "", 20, ChalkTex.Dim, new Vector2(0, alchemy ? -28 : -12), new Vector2(TW - 30, 24)), 12, 20);
             _cost = Fit(UIF.Text(transform, "", 21, ChalkTex.Yellow, new Vector2(0, -33), new Vector2(TW - 48, 22)), 12, 21);
-            if (D.openCur == Cur.Obs) { _ink = InkText.On(_cost); _cost.fontSize = Mathf.RoundToInt(18 * ChalkTex.FontScale); }
+            if (D.openCur == Cur.Obs || D.cost == Cur.Obs) { _ink = InkText.On(_cost); _cost.fontSize = Mathf.RoundToInt(18 * ChalkTex.FontScale); }
             _appear = 0;
         }
 
@@ -90,7 +90,10 @@ namespace ChalkPhysics
             {
                 afford = G.CanOpen(Id);
                 _val.text = "";
-                SetCost(d.openCost > 0 ? GameState.FmtPrice(d.openCost, d.openCur) : "открыть");
+                // a pair opens as one purchase: its first letter carries the price, the other says it comes with it
+                var group = G.OpenGroup(Id);
+                double oc = G.OpenCost(Id);
+                SetCost(group.Count > 1 && group[0] != Id ? "вместе" : oc > 0 ? GameState.FmtPrice(oc, d.openCur) : "открыть");
                 var yc = Apparatus.CurColor((int)d.openCur);
                 _cost.color = afford ? new Color(yc.r, yc.g, yc.b, 0.8f + 0.2f * Mathf.Sin(Time.time * 5)) : new Color(yc.r, yc.g, yc.b, 0.4f);
             }

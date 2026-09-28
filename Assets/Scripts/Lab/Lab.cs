@@ -376,13 +376,16 @@ namespace ChalkPhysics
         }
 
         class ChainItem { public DeviceDef device; public PerkDef perk; public double price; public int coin; }
+        /// Only to order a branch that mixes coins: roughly how many joules the bench makes per idea (balance run, mechanics).
+        const double JoulesPerIdea = 30;
+        static double InIdeas(double price, Cur c) => c == Cur.J ? price / JoulesPerIdea : price;
 
         /// A node's upgrades, cheapest first: the order in which the branch grows. The key is a formula id or "L:" + letter id.
         List<ChainItem> Chain(string key)
         {
             var list = new List<ChainItem>();
-            foreach (var d in Defs.Devices) if (d.requires == key && d.domain <= G.Era) list.Add(new ChainItem { device = d, price = d.price });
-            foreach (var p in Defs.Perks) if (p.requires == key && p.domain <= G.Era) list.Add(new ChainItem { perk = p, price = p.price, coin = p.cost == Cur.Obs ? 0 : 1 });
+            foreach (var d in Defs.Devices) if (d.requires == key && d.domain <= G.Era) list.Add(new ChainItem { device = d, price = InIdeas(d.price, d.cost) });
+            foreach (var p in Defs.Perks) if (p.requires == key && p.domain <= G.Era) list.Add(new ChainItem { perk = p, price = InIdeas(p.price, p.cost), coin = p.Teaser ? 1 : 0 });
             // what is paid in ideas grows first; a teaser priced in the next era's coin always closes the branch
             list.Sort((a, b) => a.coin != b.coin ? a.coin.CompareTo(b.coin) : a.price.CompareTo(b.price));
             return list;
@@ -529,14 +532,11 @@ namespace ChalkPhysics
             {
                 rt.localScale = Vector3.one * (h ? 1.06f : 1f);
                 if (!h) { HideTip(); return; }
-                string body = ff.riddle, stat = null;
+                string body = GameState.Symbolic(ff), stat = null;
                 var sc2 = ChalkTex.Yellow;
                 if (ff.kind != FKind.Final)
                 {
                     var yc = ff.kind == FKind.Energy ? ff.yields : Cur.Obs;
-                    body += $"\n<color=#8CFF99>{ff.effect}</color>";
-                    if (ff.kind == FKind.Measure) body += "\nУровни букв формулы делают измерение точнее";
-                    if (ff.outputs.Length > 0) body += $"\nДаёт новую величину: {string.Join(", ", ff.outputs.Select(o => Defs.L(o).sym))}";
                     stat = "За действие: " + GameState.FmtPrice(G.YieldOf(ff, yc), yc) + (G.Automated(ff.station) ? "  · работает сама" : "");
                     sc2 = Apparatus.CurColor((int)yc);
                 }
@@ -661,7 +661,7 @@ namespace ChalkPhysics
             if (p.kind == PerkKind.Actions) UIF.Text(rt, "+" + (int)p.value, 17, pcol, new Vector2(27, -1), new Vector2(40, 22));
             var pc = Apparatus.CurColor((int)p.cost);
             var price = UIF.Text(rt, "", 17, have ? ChalkTex.Green : pc, new Vector2(0, -26), new Vector2(SMALL - 8, 22));
-            InkText.On(price).Set(have ? "✓" : p.cost == Cur.Obs ? GameState.FmtPrice(p.price, Cur.Obs) : GameState.FmtCur(p.price, p.cost), pc);
+            InkText.On(price).Set(have ? "✓" : GameState.FmtPrice(p.price, p.cost), pc);
             rt.gameObject.AddComponent<BuyNodeView>().Init(box, price, () => G.Cur[(int)p.cost] >= p.price, have, cc, new Vector2(SMALL - 6, SMALL - 6));
             var c = rt.gameObject.AddComponent<Clickable>();
             c.onClick = () =>
@@ -671,7 +671,7 @@ namespace ChalkPhysics
                 else
                 {
                     Sfx.Play("nope", 0.5f);
-                    if (p.cost != Cur.Obs && G.Revolutions < (p.cost == Cur.C ? 1 : 2))
+                    if (p.Teaser && G.Revolutions < (p.cost == Cur.C ? 1 : 2))
                         FX.I.Text(Content, BoardToFixed(pos) + new Vector2(0, 70), p.cost == Cur.C ? "кулоны появятся с электричеством" : "килокалории появятся с паром", Apparatus.CurColor((int)p.cost), 24, 1.6f);
                 }
             };
@@ -681,9 +681,9 @@ namespace ChalkPhysics
                 if (!h) { HideTip(); return; }
                 bool got = G.HasPerk(p.id);
                 string body = p.desc;
-                if (!got && p.cost != Cur.Obs && G.Revolutions < (p.cost == Cur.C ? 1 : 2))
+                if (!got && p.Teaser && G.Revolutions < (p.cost == Cur.C ? 1 : 2))
                     body += p.cost == Cur.C ? "\n<color=#BF99FF>Платится кулонами — их принесёт электричество</color>" : "\n<color=#FF8C66>Платится килокалориями — их принесёт паровая эпоха</color>";
-                ShowTip("★ " + p.title, body, got ? "взято" : "Цена: " + (p.cost == Cur.Obs ? GameState.FmtPrice(p.price, Cur.Obs) : GameState.FmtCur(p.price, p.cost)), got ? ChalkTex.Green : pc);
+                ShowTip("★ " + p.title, body, got ? "взято" : "Цена: " + GameState.FmtPrice(p.price, p.cost), got ? ChalkTex.Green : pc);
             };
         }
 
@@ -807,7 +807,10 @@ namespace ChalkPhysics
             string head = d.unit.Length > 0 ? $"{d.sym} — {d.name}  [{d.unit}]" : $"{d.sym} — {d.name}";
             if (!G.Known.Contains(id))
             {
-                ShowTip(head, "", d.openCost > 0 ? "Открыть за " + GameState.FmtPrice(d.openCost, d.openCur) : "Нажми, чтобы открыть", Apparatus.CurColor((int)d.openCur));
+                var group = G.OpenGroup(id);
+                double oc = G.OpenCost(id);
+                string what = group.Count > 1 ? "Открыть " + string.Join(" и ", group.ConvertAll(l => Defs.L(l).sym)) : "Открыть";
+                ShowTip(head, "", oc > 0 ? what + " за " + GameState.FmtPrice(oc, d.openCur) : group.Count > 1 ? what : "Нажми, чтобы открыть", Apparatus.CurColor((int)d.openCur));
                 return;
             }
             if (d.Derived)
@@ -822,7 +825,7 @@ namespace ChalkPhysics
             else
             {
                 double now = G.V(id), next = G.ValueAt(id, G.Level(id) + 1);
-                sb.Append($"{GameState.FmtValue(id, now)} → <color=#8CFF99>{GameState.FmtValue(id, next)}</color>   за <color=#{ColorUtility.ToHtmlStringRGB(Apparatus.CurColor((int)d.cost))}>{GameState.FmtCur(G.UpgradeCost(id), d.cost)}</color>");
+                sb.Append($"{GameState.FmtValue(id, now)} → <color=#8CFF99>{GameState.FmtValue(id, next)}</color>   за <color=#{ColorUtility.ToHtmlStringRGB(Apparatus.CurColor((int)d.cost))}>{GameState.FmtCur(G.UpgradeCost(id), d.cost)}{(d.cost == Cur.Obs ? " идей" : "")}</color>");
             }
             ShowTip(head, sb.ToString().Trim());
         }

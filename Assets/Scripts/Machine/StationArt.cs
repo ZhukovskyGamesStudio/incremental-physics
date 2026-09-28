@@ -186,25 +186,28 @@ namespace ChalkPhysics
             switch (st)
             {
                 case "fall":
-                    {   // a small table with a ruler; the sample is pushed off its right edge
-                        float sy = k.shelfY;
+                    {   // a small table with a trapdoor in the middle of its top (the leaves are drawn live on the bench);
+                        // the specimen drops straight down between the legs
+                        float sy = k.shelfY, cx = o.x - 10;
                         bool x2 = k.Perk("fallx2"), x3 = k.Perk("fallx3");
-                        S.Line(new Vector2(o.x - 60, sy), new Vector2(o.x + 40, sy), ChalkTex.Cyan, x3 ? 6.5f : 4.5f);
+                        float lw = x3 ? 6.5f : 4.5f;
+                        S.Line(new Vector2(o.x - 60, sy), new Vector2(cx - 38, sy), ChalkTex.Cyan, lw);
+                        S.Line(new Vector2(cx + 38, sy), new Vector2(o.x + 40, sy), ChalkTex.Cyan, lw);
                         S.Line(new Vector2(o.x - 55, sy), new Vector2(o.x - 55, o.y), W, 3f);
                         S.Line(new Vector2(o.x + 35, sy), new Vector2(o.x + 35, o.y), W, 3f);
-                        S.Line(new Vector2(o.x - 55, sy - 30), new Vector2(o.x - 30, sy - 5), Dim, 2f);
-                        if (x2) S.Line(new Vector2(o.x + 35, sy - 40), new Vector2(o.x + 10, sy - 5), W, 2.5f);        // a brace for heavy loads
-                        if (x3) { S.Line(new Vector2(o.x - 55, sy - 70), new Vector2(o.x - 15, sy - 8), W, 2.5f); S.Line(new Vector2(o.x + 35, sy - 70), new Vector2(o.x - 5, sy - 8), W, 2.5f); }
+                        if (x2) S.Line(new Vector2(o.x + 35, sy - 34), new Vector2(o.x + 50, sy - 4), W, 2.5f);        // a brace for heavy loads
+                        if (x3) { S.Line(new Vector2(o.x - 55, sy - 60), new Vector2(o.x - 70, sy - 6), W, 2.5f); S.Line(new Vector2(o.x + 35, sy - 60), new Vector2(o.x + 50, sy - 6), W, 2.5f); }
                         if (k.Dev("hopper"))
-                        {   // the pusher: a little motor box behind the shelf with a rod that shoves the sample off
+                        {   // the latch motor: a little box behind the shelf (its rod and gear are drawn live)
                             S.Rect(new Vector2(o.x - 106, sy + 24), new Vector2(30, 40), W, 3f);
                             S.Line(new Vector2(o.x - 106, sy + 4), new Vector2(o.x - 106, sy), W, 3f);
                             S.Line(new Vector2(o.x - 120, sy), new Vector2(o.x - 92, sy), W, 3f);
                         }
                         if (k.sketch)
-                        {
-                            Sample(S, new Vector2(o.x + 12, sy + 21));
-                            for (int i = 0; i <= 6; i++) { float q = i / 6f; S.Dashed(new Vector2(o.x + 60 + 14 * q, Mathf.Lerp(sy + 21, o.y + 21, q * q)), new Vector2(o.x + 60 + 14 * (q + 0.16f), Mathf.Lerp(sy + 21, o.y + 21, (q + 0.16f) * (q + 0.16f))), Dim, 1.5f, 5f, 5f); }
+                        {   // the theory's sketch: the shut trapdoor, the specimen on it, its way down
+                            S.Line(new Vector2(cx - 38, sy), new Vector2(cx + 38, sy), ChalkTex.Cyan, lw);
+                            Sample(S, new Vector2(cx, sy + 21));
+                            S.Dashed(new Vector2(cx, sy - 6), new Vector2(cx, o.y + 42), Dim, 1.5f, 5f, 5f);
                         }
                         break;
                     }
@@ -285,20 +288,17 @@ namespace ChalkPhysics
                         break;
                     }
                 case "density":
-                    {   // a measuring cylinder on a scale
+                    {   // a tall measuring cylinder on a foot; its scale is drawn live on the bench (its divisions are δ)
                         S.Rect(o + new Vector2(0, 14), new Vector2(110, 28), W, 3f);
-                        S.Line(o + new Vector2(-40, 28), o + new Vector2(-40, 130), W, 3f);
-                        S.Line(o + new Vector2(40, 28), o + new Vector2(40, 130), W, 3f);
-                        S.Line(o + new Vector2(-40, 130), o + new Vector2(-50, 138), W, 3f);
-                        int ticks = k.Perk("densx2") ? 9 : 4; float step = k.Perk("densx2") ? 11 : 22;
-                        for (int i = 1; i <= ticks; i++) S.Line(o + new Vector2(30, 28 + i * step), o + new Vector2(40, 28 + i * step), Dim, 2f);
-                        S.Circle(o + new Vector2(0, 165), 16, W, 2.5f);
+                        S.Line(o + new Vector2(-40, 28), o + new Vector2(-40, 170), W, 3f);
+                        S.Line(o + new Vector2(40, 28), o + new Vector2(40, 170), W, 3f);
+                        S.Line(o + new Vector2(-40, 170), o + new Vector2(-50, 178), W, 3f);
                         if (k.sketch)
-                        {
-                            S.Line(o + new Vector2(-38, 98), o + new Vector2(38, 98), new Color(0.45f, 0.86f, 1f, 0.6f), 2.5f);
-                            S.Dashed(o + new Vector2(-38, 122), o + new Vector2(38, 122), new Color(0.45f, 0.86f, 1f, 0.6f), 2f, 6f, 6f);
+                        {   // the theory's sketch: the scale, the water before and after the specimen
+                            for (int i = 1; i <= 14; i++) S.Line(o + new Vector2(-38, 28 + i * 10), o + new Vector2(i % 5 == 0 ? -26 : -31, 28 + i * 10), Dim, 1.8f);
+                            S.Line(o + new Vector2(-38, 88), o + new Vector2(38, 88), new Color(0.45f, 0.86f, 1f, 0.6f), 2.5f);
+                            S.Dashed(o + new Vector2(-38, 132), o + new Vector2(38, 132), new Color(0.45f, 0.86f, 1f, 0.6f), 2f, 6f, 6f);
                             Sample(S, o + new Vector2(0, 55));
-                            S.Line(o + new Vector2(0, 165), o + new Vector2(8, 175), ChalkTex.Red, 2.5f);
                         }
                         break;
                     }

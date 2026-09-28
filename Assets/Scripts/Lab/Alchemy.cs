@@ -492,7 +492,7 @@ namespace ChalkPhysics
             _panelBox.Line(new Vector2(-190, 108), new Vector2(190, 108), new Color(0.55f, 1f, 0.6f, 0.35f), 2.5f);   // the find, underlined
             _riddle.text = f.riddle;
             _effect.text = string.IsNullOrEmpty(f.effect) ? "" : f.effect;
-            _outputs.text = f.outputs.Length > 0 ? "Новая буква на полке: " + string.Join(", ", f.outputs.Select(o => Defs.L(o).sym + " — " + Defs.L(o).name)) : "";
+            _outputs.text = f.outputs.Length > 0 ? "+ " + string.Join(", ", f.outputs.Select(o => Defs.L(o).sym)) + " на полке" : "";
             _navL.gameObject.SetActive(false); _navR.gameObject.SetActive(false);
             _count.text = "";
             _catcher.gameObject.SetActive(true);

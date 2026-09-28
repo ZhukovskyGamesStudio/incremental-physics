@@ -78,12 +78,17 @@ namespace ChalkPhysics
         bool _preview;                   // while true, a golden sample counts as golden only once the player knows it
         public event Action<int> RevolutionDone;
 
-        static string SavePath => Path.Combine(Application.persistentDataPath, "chalk_save7.json");
+        // the save's name changes whenever old saves would no longer make sense (8: the rebalance of every epoch)
+        static string SavePath => Path.Combine(Application.persistentDataPath, "chalk_save8.json");
         // in a browser the save lives in PlayerPrefs (IndexedDB), which is flushed for sure on Save()
-        const string SaveKey = "chalk_save7";
+        const string SaveKey = "chalk_save8";
         static bool Web => Application.platform == RuntimePlatform.WebGLPlayer;
-        static void WriteSave(string json) { if (Web) { PlayerPrefs.SetString(SaveKey, json); PlayerPrefs.Save(); } else File.WriteAllText(SavePath, json); }
-        static string ReadSave() => Web ? PlayerPrefs.GetString(SaveKey, "") : File.Exists(SavePath) ? File.ReadAllText(SavePath) : null;
+        /// The balance simulation (Editor/BalanceSim) plays in a sandbox: no save is read or written, and the boxes
+        /// of specimens come from a seeded generator so that runs can be compared.
+        public static bool Sandbox;
+        public static System.Random SandboxRng;
+        static void WriteSave(string json) { if (Sandbox) return; if (Web) { PlayerPrefs.SetString(SaveKey, json); PlayerPrefs.Save(); } else File.WriteAllText(SavePath, json); }
+        static string ReadSave() => Sandbox ? null : Web ? PlayerPrefs.GetString(SaveKey, "") : File.Exists(SavePath) ? File.ReadAllText(SavePath) : null;
 
         public GameState()
         {
@@ -172,9 +177,14 @@ namespace ChalkPhysics
         /// Every experiment found after the first brings one more action with it: a new instrument needs time to try.
         public int ExperimentActions { get { int n = 0; foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0) n++; return Math.Max(0, n - 1); } }
         public int MaxActions { get { int n = BaseActions + ExperimentActions; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Actions) n += (int)d.value; } return n; } }
-        public double AutoMult { get { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.AutoMult) m *= d.value; } return m; } }
+        /// How many times an automaton fires per action: once, plus one for every "+1 раз" perk.
+        public double AutoMult { get { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.AutoMult) m += d.value; } return m; } }
         public double StationMult(string station) { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.StationMult && d.station == station) m *= d.value; } return m; }
-        public float SwingPeriod => Mathf.Max(0.3f, (float)V("T"));
+        /// How long one swing takes on screen: the period T, sped up so that l = g = 1 swings in 2 s.
+        public float SwingPeriod => Mathf.Max(0.3f, (float)V("T") / Mathf.PI);
+        /// Swings (one idea each) that one push of the pendulum gives: 3 at l = g = 1, growing as the square root of
+        /// g / l, so a shorter thread or a stronger g swings more. Fractions carry over to the next push.
+        public double PendSwings => 3 * 2 * Math.PI / Math.Max(1e-6, V("T")) + (HasPerk("swings") ? 2 : 0);
         public int SampleCount { get { int n = 3; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Samples) n += (int)d.value; } return n; } }
         public double GoldChance => 0.06 + (HasPerk("gold1") ? 0.06 : 0) + (HasPerk("gold2") ? 0.08 : 0) + (HasPerk("gold3") ? 0.1 : 0);
         public double CurMult(Cur c) { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.CurMult && d.cur == c) m *= d.value; } return m; }
@@ -208,9 +218,10 @@ namespace ChalkPhysics
         public double ObsMult { get { double m = (Has("lens1") ? 1.5 : 1) * (Has("lens2") ? 1.5 : 1) * (Has("lens3") ? 1.5 : 1) * (Has("lens4") ? 1.5 : 1); foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.ObsMult) m *= d.value; } return m; } }
 
         /// Levels of the letters in a measuring formula sharpen it: joules put into letters pay back in observations.
+        /// Mechanics has left this behind: its instruments pay their formula's value (paysValue), the pendulum per swing.
         public double Precision(FormulaDef f)
         {
-            if (f.kind != FKind.Measure) return 1;
+            if (f.kind != FKind.Measure || f.domain == 0) return 1;
             double n = 0;
             foreach (var l in f.Slots()) { var d = Defs.L(l); if (!d.Derived && !d.perSample) n += Level(l) - 1; }
             return 1 + 0.04 * n;
@@ -254,7 +265,7 @@ namespace ChalkPhysics
             if (f.station == "arch" && sample != null && !sample.Floats) { ActiveSample = prev; _preview = prevP; return 0; }
             if (f.kind == FKind.Energy && f.yields == c) y += f.eval(this) * Mult * sm * sci;
             // ideas come from measuring instruments only: an experiment that just makes energy teaches nothing new
-            if (c == ChalkPhysics.Cur.Obs && f.kind == FKind.Measure) y += f.obs * ObsMult * sm * Precision(f) * Mult / DevSpeed * sci;
+            if (c == ChalkPhysics.Cur.Obs && f.kind == FKind.Measure) y += (f.pays != null ? f.pays(this) : f.paysValue ? f.eval(this) : f.obs * Precision(f)) * ObsMult * sm * Mult / DevSpeed * sci;
             ActiveSample = prev; _preview = prevP;
             if (y <= 0) return 0;
             y *= CurMult(c);
@@ -340,7 +351,9 @@ namespace ChalkPhysics
             Changed?.Invoke();
         }
 
-        static readonly double[] Ratios = { 0.5, 0.7, 1.0, 1.0, 1.4, 2.0, 3.0 };
+        // specimens are 1/2, 1, 2 or 3 times the average (1 twice as often) and 1/2, 1 or 2 rough: easy to weigh up in the head
+        static readonly double[] Ratios = { 0.5, 1.0, 1.0, 2.0, 3.0 };
+        static readonly double[] Roughness = { 0.5, 1.0, 2.0 };
 
         /// The six hatches from the lightest to the darkest (Apparatus.Fill): dots, rows, columns, diagonal, grid,
         /// grid with a diagonal. With the size showing the volume, the hatch shows the density, so the pair of them
@@ -360,12 +373,12 @@ namespace ChalkPhysics
         {
             Samples.Clear();
             Selected = -1;
-            var rnd = new System.Random();
+            var rnd = Sandbox && SandboxRng != null ? SandboxRng : new System.Random();
             int n = SampleCount;
             for (int i = 0; i < n; i++)
             {
                 double heavy = HasPerk("heavy") ? 1.25 : 1;
-                var s = new Sample { id = i, massR = Ratios[rnd.Next(Ratios.Length)] * heavy, volR = Ratios[rnd.Next(Ratios.Length)], mu = System.Math.Round(0.1 + rnd.NextDouble() * 0.8, 2) };
+                var s = new Sample { id = i, massR = Ratios[rnd.Next(Ratios.Length)] * heavy, volR = Ratios[rnd.Next(Ratios.Length)], mu = Roughness[rnd.Next(Roughness.Length)] };
                 s.golden = rnd.NextDouble() < GoldChance;
                 Samples.Add(s);
             }
@@ -469,18 +482,35 @@ namespace ChalkPhysics
         public bool UpgradesOpen => Total[(int)ChalkPhysics.Cur.J] > 0 || Revolutions > 0;
 
         // ---------------- letters: opened for joules ----------------
+        /// Letters that open together: the new letters of one layer of the tree. The theory there needs them all, so
+        /// one of them alone would buy nothing — they are one purchase. The layer's first letter leads the pair.
+        public List<string> OpenGroup(string id)
+        {
+            var g = new List<string>();
+            int k = Defs.LayerOf("L:" + id);
+            if (k >= 0)
+                foreach (var c in Defs.Tree[k])
+                    if (Defs.Kind(c) == 'L') { var l = Defs.Id(c); if (!Known.Contains(l) && !Defs.L(l).Derived) g.Add(l); }
+            if (!g.Contains(id)) g.Add(id);
+            return g;
+        }
+
+        /// What opening this letter costs: the whole pair it belongs to.
+        public double OpenCost(string id) { double c = 0; foreach (var l in OpenGroup(id)) c += Defs.L(l).openCost; return c; }
+
         public bool CanOpen(string id)
         {
             var d = Defs.L(id);
-            return !Known.Contains(id) && !d.Derived && NodeVisible("L:" + id) && Cur[(int)d.openCur] >= d.openCost;
+            return !Known.Contains(id) && !d.Derived && NodeVisible("L:" + id) && Cur[(int)d.openCur] >= OpenCost(id);
         }
 
         public bool OpenLetter(string id)
         {
             if (!CanOpen(id)) return false;
-            Cur[(int)Defs.L(id).openCur] -= Defs.L(id).openCost;
-            AddKnown(id);
-            LetterOpened?.Invoke(id);
+            var group = OpenGroup(id);
+            Cur[(int)Defs.L(id).openCur] -= OpenCost(id);
+            foreach (var l in group) AddKnown(l);
+            foreach (var l in group) LetterOpened?.Invoke(l);
             Changed?.Invoke();
             Save();
             return true;
