@@ -89,7 +89,7 @@ namespace ChalkPhysics
                     var unknown = G.Samples.FindAll(x => !x.knowM && _app.Free(x));
                     if (pick == null && G.Built("dyna") && !G.Automated("dyna") && unknown.Count > 0 && G.Samples.Count - unknown.Count < 2 && _app.Ready("dyna")) { pick = "dyna"; sample = unknown[Random.Range(0, unknown.Count)]; }
                     // 2b. the steam bench runs on heat: keep it warm before anything else
-                    if (pick == null && G.Built("heat") && !G.Automated("heater") && G.Boiler < 0.55f && _app.Ready("heater"))
+                    if (pick == null && G.Built("heat") && !G.Automated("heater") && G.Boiler < 0.55f && (G.Built("engine") || G.Built("ice") || G.Built("gas")) && _app.Ready("heater"))
                     {
                         sample = G.BestSampleFor(Defs.F("heat"), _app.Free);
                         if (sample != null) pick = "heater";

@@ -79,9 +79,9 @@ namespace ChalkPhysics
         public event Action<int> RevolutionDone;
 
         // the save's name changes whenever old saves would no longer make sense (8: the rebalance of every epoch)
-        static string SavePath => Path.Combine(Application.persistentDataPath, "chalk_save8.json");
+        static string SavePath => Path.Combine(Application.persistentDataPath, "chalk_save9.json");
         // in a browser the save lives in PlayerPrefs (IndexedDB), which is flushed for sure on Save()
-        const string SaveKey = "chalk_save8";
+        const string SaveKey = "chalk_save9";
         static bool Web => Application.platform == RuntimePlatform.WebGLPlayer;
         /// The balance simulation (Editor/BalanceSim) plays in a sandbox: no save is read or written, and the boxes
         /// of specimens come from a seeded generator so that runs can be compared.
@@ -164,7 +164,8 @@ namespace ChalkPhysics
             return r;
         }
 
-        public double Mult => Defs.DomainMult[Math.Min(Revolutions, Defs.DomainMult.Length - 1)] * DevSpeed;
+        /// No epoch multiplies anything: a revolution brings a new element, not a bigger number.
+        public double Mult => DevSpeed;
         /// The epoch the game is in: only its tree, letters and upgrades are on the board.
         public int Era => Math.Min(Revolutions, 2);
         public bool Built(string formulaId) => Proven.Contains(formulaId);
@@ -174,9 +175,7 @@ namespace ChalkPhysics
         public bool AnyStation { get { foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0) return true; return false; } }
 
         // ---------------- bench parameters ----------------
-        /// Every experiment found after the first brings one more action with it: a new instrument needs time to try.
-        public int ExperimentActions { get { int n = 0; foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0) n++; return Math.Max(0, n - 1); } }
-        public int MaxActions { get { int n = BaseActions + ExperimentActions; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Actions) n += (int)d.value; } return n; } }
+        public int MaxActions { get { int n = BaseActions; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Actions) n += (int)d.value; } return n; } }
         /// How many times an automaton fires per action: once, plus one for every "+1 раз" perk.
         public double AutoMult { get { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.AutoMult) m += d.value; } return m; } }
         public double StationMult(string station) { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.StationMult && d.station == station) m *= d.value; } return m; }
@@ -265,7 +264,9 @@ namespace ChalkPhysics
             if (f.station == "arch" && sample != null && !sample.Floats) { ActiveSample = prev; _preview = prevP; return 0; }
             if (f.kind == FKind.Energy && f.yields == c) y += f.eval(this) * Mult * sm * sci;
             // ideas come from measuring instruments only: an experiment that just makes energy teaches nothing new
-            if (c == ChalkPhysics.Cur.Obs && f.kind == FKind.Measure) y += (f.pays != null ? f.pays(this) : f.paysValue ? f.eval(this) : f.obs * Precision(f)) * ObsMult * sm * Mult / DevSpeed * sci;
+            // a specimen this instrument has already measured teaches half as much: the next ideas are in the next specimen
+            if (c == ChalkPhysics.Cur.Obs && f.kind == FKind.Measure) y += (f.pays != null ? f.pays(this) : f.paysValue ? f.eval(this) : f.obs * Precision(f)) * ObsMult * sm * Mult / DevSpeed * sci
+                * (sample != null && f.reveals != null && sample.seenAt.Contains(f.station) ? 0.5 : 1);
             ActiveSample = prev; _preview = prevP;
             if (y <= 0) return 0;
             y *= CurMult(c);
@@ -582,10 +583,8 @@ namespace ChalkPhysics
         public void Discover(FormulaDef f)
         {
             if (Built(f.id)) return;
-            int before = ExperimentActions;
             Proven.Add(f.id);
             BuiltAt[f.id] = Lessons;
-            if (Phase == Phase.Lesson) ActionsLeft += ExperimentActions - before;   // found mid-experiment: the action is there at once
             foreach (var o in f.outputs) AddKnown(o);
             if (f.kind == FKind.Final) Won = true;
             FormulaProven?.Invoke(f.id);

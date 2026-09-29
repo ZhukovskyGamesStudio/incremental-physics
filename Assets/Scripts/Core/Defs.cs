@@ -86,7 +86,6 @@ namespace ChalkPhysics
     public static class Defs
     {
         public static readonly string[] DomainNames = { "Механика", "Электричество", "Тепло" };
-        public static readonly double[] DomainMult = { 1, 2, 10 };
         /// Ideas have no written name: a chalk lightbulb is drawn next to the number instead.
         public static readonly string[] CurName = { "Дж", "", "Кл", "ккал" };
         public static readonly string[] CurLong = { "энергия", "идеи", "заряд", "теплота" };
@@ -97,36 +96,36 @@ namespace ChalkPhysics
             new LetterDef { id = "g", sym = "g", name = "гравитация", unit = "м/с²", baseV = 1, step = 0.25, cost0 = 2, costK = 3, cost = Cur.Obs },
             new LetterDef { id = "h", sym = "h", name = "высота стеллажа", unit = "м", baseV = 1, step = 1, max = 20, cost0 = 3, costK = 2.5, fmt = "0", openCost = 3, openCur = Cur.Obs },
             new LetterDef { id = "F", sym = "F", name = "сила тяжести", unit = "Н", derivedFrom = "dyna", fmt = "0.#" },
-            new LetterDef { id = "k", sym = "k", name = "жёсткость пружины", unit = "Н/м", baseV = 1000, step = 1000, cost0 = 100, costK = 2.5, fmt = "0", openCost = 40 },
-            new LetterDef { id = "x", sym = "x", name = "сжатие пружины", unit = "м", baseV = 1, step = 1.1, max = 100, cost0 = 60, costK = 2.5, openCost = 80, mul = true, fmt = "0.##" },
+            new LetterDef { id = "k", sym = "k", name = "жёсткость пружины", unit = "Н/м", baseV = 100, step = 100, cost0 = 20, costK = 2.5, fmt = "0", openCost = 10 },
+            new LetterDef { id = "x", sym = "x", name = "сжатие пружины", unit = "м", baseV = 1, step = 1.1, max = 100, cost0 = 15, costK = 2.5, openCost = 15, mul = true, fmt = "0.##" },
             new LetterDef { id = "l", sym = "l", name = "длина нити", unit = "м", baseV = 1.0, step = 0.64, mul = true, min = 0.05, cost0 = 200, costK = 3.5, openCost = 300, cost = Cur.Obs, openCur = Cur.Obs },
             new LetterDef { id = "T", sym = "T", name = "период маятника", unit = "с", derivedFrom = "pend", fmt = "0.00" },
             new LetterDef { id = "rho", sym = "ρ", name = "плотность жидкости", unit = "кг/м³", baseV = 10, step = 10, cost0 = 700, costK = 2.5, fmt = "0", openCost = 7000, cost = Cur.Obs, openCur = Cur.Obs },
             new LetterDef { id = "V", sym = "V", name = "средний объём образцов", unit = "м³", baseV = 1, step = 1, cost0 = 1300, costK = 2.5, openCost = 13000, cost = Cur.Obs, openCur = Cur.Obs },
             new LetterDef { id = "dv", sym = "δ", name = "цена деления", unit = "м³", baseV = 0.01, step = 0.8, mul = true, min = 0.0001, cost = Cur.Obs, cost0 = 3000, costK = 2.5, fmt = "0.####", openCost = 20000, openCur = Cur.Obs },
             new LetterDef { id = "Fa", sym = "Fа", name = "сила Архимеда", unit = "Н", derivedFrom = "arch", fmt = "0.#" },
-            new LetterDef { id = "mu", sym = "μ", name = "шероховатость образца", unit = "", perSample = true, baseV = 0.5, step = 0, cost0 = 0, costK = 1, fmt = "0.00", openCost = 800000 },
-            new LetterDef { id = "d", sym = "d", name = "длина дорожки", unit = "м", baseV = 100, step = 100, max = 2000, cost0 = 300000, costK = 2.5, fmt = "0", openCost = 2000000 },
-            new LetterDef { id = "I", sym = "I", name = "момент инерции", unit = "кг·м²", baseV = 10000, step = 10000, cost0 = 2000000, costK = 2.5, fmt = "0", openCost = 10000000 },
-            new LetterDef { id = "w", sym = "ω", name = "угловая скорость", unit = "рад/с", baseV = 10, step = 10, max = 100, cost0 = 5000000, costK = 3, fmt = "0", openCost = 20000000 },
+            new LetterDef { id = "mu", sym = "μ", name = "шероховатость образца", unit = "", perSample = true, baseV = 0.5, step = 0, cost0 = 0, costK = 1, fmt = "0.00", openCost = 3000000 },
+            new LetterDef { id = "d", sym = "d", name = "длина дорожки", unit = "м", baseV = 100, step = 100, max = 2000, cost0 = 3000000, costK = 2.5, fmt = "0", openCost = 7000000 },
+            new LetterDef { id = "I", sym = "I", name = "момент инерции", unit = "кг·м²", baseV = 10000, step = 10000, cost0 = 300000000, costK = 2.5, fmt = "0", openCost = 100000000 },
+            new LetterDef { id = "w", sym = "ω", name = "угловая скорость", unit = "рад/с", baseV = 10, step = 10, max = 100, cost0 = 500000000, costK = 3.5, fmt = "0", openCost = 200000000 },
             // --- electricity (levels bought with coulombs) ---
-            new LetterDef { id = "U", sym = "U", name = "напряжение", unit = "В", domain = 1, cost = Cur.C, baseV = 10, step = 10, cost0 = 20, costK = 3, fmt = "0" },
-            new LetterDef { id = "R", sym = "R", name = "сопротивление", unit = "Ом", domain = 1, cost = Cur.Obs, baseV = 1, step = 0.8, mul = true, min = 0.05, cost0 = 100, costK = 4, fmt = "0.##" },
+            new LetterDef { id = "U", sym = "U", name = "напряжение", unit = "В", domain = 1, cost = Cur.C, baseV = 1, step = 1, cost0 = 3, costK = 2.5, fmt = "0" },
+            new LetterDef { id = "R", sym = "R", name = "сопротивление", unit = "Ом", domain = 1, cost = Cur.Obs, baseV = 1, step = 0.8, mul = true, min = 0.05, cost0 = 10, costK = 3, fmt = "0.##" },
             new LetterDef { id = "Ie", sym = "I", name = "сила тока", unit = "А", domain = 1, derivedFrom = "ohm", fmt = "0.##" },
-            new LetterDef { id = "t", sym = "t", name = "время включения", unit = "с", domain = 1, cost = Cur.C, baseV = 1, step = 1, max = 30, cost0 = 50, costK = 3, fmt = "0" },
+            new LetterDef { id = "t", sym = "t", name = "время включения", unit = "с", domain = 1, cost = Cur.C, baseV = 1, step = 1, max = 30, cost0 = 5, costK = 2.5, fmt = "0" },
             new LetterDef { id = "P", sym = "P", name = "мощность", unit = "Вт", domain = 1, derivedFrom = "pow", fmt = "0.#" },
-            new LetterDef { id = "Cc", sym = "C", name = "ёмкость", unit = "Ф", domain = 1, cost = Cur.C, baseV = 10, step = 10, cost0 = 1000, costK = 3, fmt = "0", openCost = 50000, openCur = Cur.C },
-            new LetterDef { id = "Lind", sym = "L", name = "индуктивность", unit = "Гн", domain = 1, cost = Cur.Obs, baseV = 10, step = 10, cost0 = 5000, costK = 3, fmt = "0", openCost = 1000000, openCur = Cur.Obs },
+            new LetterDef { id = "Cc", sym = "C", name = "ёмкость", unit = "Ф", domain = 1, cost = Cur.C, baseV = 100, step = 100, cost0 = 100, costK = 2.5, fmt = "0", openCost = 100, openCur = Cur.C },
+            new LetterDef { id = "Lind", sym = "L", name = "индуктивность", unit = "Гн", domain = 1, cost = Cur.Obs, baseV = 1, step = 1, cost0 = 1000000, costK = 3, fmt = "0", openCost = 3000000, openCur = Cur.Obs },
             // --- heat (levels bought with kilocalories) ---
-            new LetterDef { id = "c", sym = "c", name = "теплоёмкость", unit = "Дж/(кг·К)", domain = 2, cost = Cur.Cal, baseV = 100, step = 100, cost0 = 20, costK = 3, fmt = "0" },
-            new LetterDef { id = "dT", sym = "ΔT", name = "нагрев", unit = "К", domain = 2, cost = Cur.Cal, baseV = 10, step = 10, cost0 = 50, costK = 3, fmt = "0" },
+            new LetterDef { id = "c", sym = "c", name = "теплоёмкость", unit = "Дж/(кг·К)", domain = 2, cost = Cur.Cal, baseV = 1, step = 1, cost0 = 3, costK = 2.5, fmt = "0" },
+            new LetterDef { id = "dT", sym = "ΔT", name = "нагрев", unit = "К", domain = 2, cost = Cur.Cal, baseV = 1, step = 1, cost0 = 5, costK = 2.5, fmt = "0" },
             new LetterDef { id = "Q", sym = "Q", name = "количество теплоты", unit = "Дж", domain = 2, derivedFrom = "heat", fmt = "0" },
-            new LetterDef { id = "Tn", sym = "Tн", name = "t° нагревателя", unit = "К", domain = 2, cost = Cur.Cal, baseV = 400, step = 100, max = 2000, cost0 = 1000, costK = 3, fmt = "0", openCost = 1000000, openCur = Cur.Cal },
-            new LetterDef { id = "Tx", sym = "Tх", name = "t° холодильника", unit = "К", domain = 2, cost = Cur.Obs, baseV = 300, step = 0.9, mul = true, min = 20, cost0 = 2000, costK = 3, fmt = "0", openCost = 1000000, openCur = Cur.Cal },
+            new LetterDef { id = "Tn", sym = "Tн", name = "t° нагревателя", unit = "К", domain = 2, cost = Cur.Cal, baseV = 400, step = 100, max = 2000, cost0 = 100, costK = 3, fmt = "0", openCost = 100, openCur = Cur.Cal },
+            new LetterDef { id = "Tx", sym = "Tх", name = "t° холодильника", unit = "К", domain = 2, cost = Cur.Obs, baseV = 300, step = 0.9, mul = true, min = 20, cost0 = 300, costK = 3, fmt = "0", openCost = 100, openCur = Cur.Cal },
             new LetterDef { id = "eta", sym = "η", name = "КПД", unit = "", domain = 2, derivedFrom = "carnot", fmt = "0%" },
-            new LetterDef { id = "lam", sym = "λ", name = "теплота плавления", unit = "Дж/кг", domain = 2, cost = Cur.Obs, baseV = 100000, step = 100000, cost0 = 10000, costK = 3, fmt = "0", openCost = 10000000, openCur = Cur.Obs },
-            new LetterDef { id = "p", sym = "p", name = "давление пара", unit = "Па", domain = 2, cost = Cur.Cal, baseV = 1000000, step = 1000000, cost0 = 100000, costK = 3, fmt = "0", openCost = 1000000000, openCur = Cur.Cal },
-            new LetterDef { id = "dV", sym = "ΔV", name = "ход поршня", unit = "м³", domain = 2, cost = Cur.Obs, baseV = 1, step = 1, cost0 = 100000, costK = 3, openCost = 1000000000, fmt = "0", openCur = Cur.Cal },
+            new LetterDef { id = "lam", sym = "λ", name = "теплота плавления", unit = "Дж/кг", domain = 2, cost = Cur.Obs, baseV = 50, step = 50, cost0 = 30000, costK = 3, fmt = "0", openCost = 100000, openCur = Cur.Obs },
+            new LetterDef { id = "p", sym = "p", name = "давление пара", unit = "Па", domain = 2, cost = Cur.Cal, baseV = 10000, step = 10000, cost0 = 10000, costK = 3, fmt = "0", openCost = 100000, openCur = Cur.Cal },
+            new LetterDef { id = "dV", sym = "ΔV", name = "ход поршня", unit = "м³", domain = 2, cost = Cur.Obs, baseV = 1, step = 1, cost0 = 10000, costK = 3, openCost = 100000, fmt = "0", openCur = Cur.Cal },
         };
 
         public static readonly List<FormulaDef> Formulas = new List<FormulaDef>
@@ -251,10 +250,10 @@ namespace ChalkPhysics
         public static readonly List<DeviceDef> Devices = new List<DeviceDef>
         {
             // ---- mechanics ----
-            new DeviceDef { id = "hopper", title = "Автозащёлка", desc = "сама открывает люк под выданным образцом при каждом действии", requires = "fall", cost = Cur.J, price = 200, automates = "fall", period = 2f, icon = "pusher" },
-            new DeviceDef { id = "hook", title = "Автоподвес", desc = "динамометр сам взвешивает выданный ему образец при каждом действии", requires = "dyna", cost = Cur.J, price = 300, automates = "dyna", period = 3f, icon = "hook" },
+            new DeviceDef { id = "hopper", title = "Автозащёлка", desc = "сама открывает люк под выданным образцом при каждом действии", requires = "fall", cost = Cur.J, price = 60, automates = "fall", period = 2f, icon = "pusher" },
+            new DeviceDef { id = "hook", title = "Автоподвес", desc = "динамометр сам взвешивает выданный ему образец при каждом действии", requires = "dyna", cost = Cur.J, price = 100, automates = "dyna", period = 3f, icon = "hook" },
             new DeviceDef { id = "lens1", title = "Лупа", desc = "идей ×1.5", requires = "pend", price = 200, icon = "lens" },
-            new DeviceDef { id = "cam", title = "Кулачок", desc = "вал сам сжимает пружину с выданным образцом при каждом действии", requires = "spring", cost = Cur.J, price = 25000, automates = "spring", period = 2.5f, icon = "cam" },
+            new DeviceDef { id = "cam", title = "Кулачок", desc = "вал сам сжимает пружину с выданным образцом при каждом действии", requires = "spring", cost = Cur.J, price = 2500, automates = "spring", period = 2.5f, icon = "cam" },
             new DeviceDef { id = "clock", title = "Хронометр", desc = "образец на маятнике приедается вдвое медленнее", requires = "pend", price = 2500, icon = "clock" },
             new DeviceDef { id = "hopper2", title = "Стопка грузов", desc = "полка роняет по два груза за раз", requires = "density", cost = Cur.J, price = 450000, icon = "stack" },
             new DeviceDef { id = "scoop", title = "Черпак", desc = "черпак сам окунает выданный образец при каждом действии", requires = "arch", cost = Cur.J, price = 1200000, automates = "arch", period = 3f, icon = "scoop" },
@@ -265,17 +264,17 @@ namespace ChalkPhysics
             new DeviceDef { id = "winder", title = "Автоподъём", desc = "верёвка маховика сама поднимает выданный образец при каждом действии", requires = "fly", cost = Cur.J, price = 7500000, automates = "fly", period = 5f },
             new DeviceDef { id = "hopper3", title = "Штабель", desc = "полка роняет по четыре груза за раз", requires = "friction", cost = Cur.J, price = 9000000, icon = "stack" },
             // ---- electricity: the circuit cannot be automated, so its devices sharpen it instead ----
-            new DeviceDef { id = "lab", title = "Лаборант", desc = "сам докупает дешёвые буквы (до ¼ запаса)", requires = "ohm", domain = 1, price = 2000, icon = "eye" },
-            new DeviceDef { id = "lens3", title = "Осциллограф", desc = "идей ×1.5", requires = "pow", domain = 1, price = 20000, icon = "lens" },
-            new DeviceDef { id = "lens5", title = "Гальванометр", desc = "идей ×1.5", requires = "cap", domain = 1, price = 500000, icon = "lens" },
+            new DeviceDef { id = "lab", title = "Лаборант", desc = "сам докупает дешёвые буквы (до ¼ запаса)", requires = "ohm", domain = 1, price = 300, icon = "eye" },
+            new DeviceDef { id = "lens3", title = "Осциллограф", desc = "идей ×1.5", requires = "pow", domain = 1, price = 2000, icon = "lens" },
+            new DeviceDef { id = "lens5", title = "Гальванометр", desc = "идей ×1.5", requires = "cap", domain = 1, price = 50000, icon = "lens" },
             // ---- heat ----
-            new DeviceDef { id = "thermo", title = "Терморегулятор", desc = "котелок сам греет выданный образец при каждом действии", requires = "heat", domain = 2, cost = Cur.Cal, price = 1000000, automates = "heater", period = 3f },
-            new DeviceDef { id = "autocal", title = "Автокалориметр", desc = "калориметр сам изучает выданный образец при каждом действии", requires = "calm", domain = 2, cost = Cur.Cal, price = 3000000, automates = "calor", period = 3f },
-            new DeviceDef { id = "valve", title = "Автоклапан", desc = "клапан машины открывается сам при каждом действии", requires = "carnot", domain = 2, cost = Cur.Cal, price = 10000000, automates = "engine", period = 4f },
-            new DeviceDef { id = "lens4", title = "Тепловизор", desc = "идей ×1.5", requires = "carnot", domain = 2, price = 2000000, icon = "lens" },
-            new DeviceDef { id = "icebox", title = "Ледогенератор", desc = "лёд сам подставляется под выданный образец при каждом действии", requires = "ice", domain = 2, cost = Cur.Cal, price = 40000000, automates = "ice", period = 3f },
-            new DeviceDef { id = "lagging", title = "Обшивка котла", desc = "стенд остывает вдвое медленнее", requires = "heat", domain = 2, cost = Cur.Cal, price = 10000000, icon = "heater" },
-            new DeviceDef { id = "crank", title = "Кривошип", desc = "поршень ходит сам при каждом действии", requires = "gas", domain = 2, cost = Cur.Cal, price = 200000000, automates = "piston", period = 3f },
+            new DeviceDef { id = "thermo", title = "Терморегулятор", desc = "котелок сам греет выданный образец при каждом действии", requires = "heat", domain = 2, cost = Cur.Cal, price = 1000, automates = "heater", period = 3f },
+            new DeviceDef { id = "autocal", title = "Автокалориметр", desc = "калориметр сам изучает выданный образец при каждом действии", requires = "calm", domain = 2, cost = Cur.Cal, price = 3000, automates = "calor", period = 3f },
+            new DeviceDef { id = "valve", title = "Автоклапан", desc = "клапан машины открывается сам при каждом действии", requires = "carnot", domain = 2, cost = Cur.Cal, price = 10000, automates = "engine", period = 4f },
+            new DeviceDef { id = "lens4", title = "Тепловизор", desc = "идей ×1.5", requires = "carnot", domain = 2, price = 3000, icon = "lens" },
+            new DeviceDef { id = "icebox", title = "Ледогенератор", desc = "лёд сам подставляется под выданный образец при каждом действии", requires = "ice", domain = 2, cost = Cur.Cal, price = 30000, automates = "ice", period = 3f },
+            new DeviceDef { id = "lagging", title = "Обшивка котла", desc = "стенд остывает вдвое медленнее", requires = "heat", domain = 2, cost = Cur.Cal, price = 10000, icon = "heater" },
+            new DeviceDef { id = "crank", title = "Кривошип", desc = "поршень ходит сам при каждом действии", requires = "gas", domain = 2, cost = Cur.Cal, price = 300000, automates = "piston", period = 3f },
         };
 
         public static readonly List<PerkDef> Perks = new List<PerkDef>
@@ -284,15 +283,15 @@ namespace ChalkPhysics
             // the first thing on the map to buy, right after the dynamometer: three actions are too few to see what is going on
             new PerkDef { id = "act0", title = "Лишняя минута", desc = "+1 действие за эксперимент", requires = "dyna", kind = PerkKind.Actions, value = 1, price = 3, early = true },
             new PerkDef { id = "act1", title = "Долгая смена", desc = "+2 действия за эксперимент", requires = "fall", kind = PerkKind.Actions, value = 2, price = 100 },
-            new PerkDef { id = "box1", title = "Коробка побольше", desc = "+2 образца в эксперименте", requires = "dyna", kind = PerkKind.Samples, value = 2, cost = Cur.J, price = 1500 },
+            new PerkDef { id = "box1", title = "Коробка побольше", desc = "+2 образца в эксперименте", requires = "dyna", kind = PerkKind.Samples, value = 2, cost = Cur.J, price = 300 },
             new PerkDef { id = "box2", title = "Ящик образцов", desc = "+3 образца в эксперименте", requires = "arch", kind = PerkKind.Samples, value = 3, cost = Cur.J, price = 600000 },
             new PerkDef { id = "autoweigh", title = "Лаборант-весовщик", desc = "все образцы взвешены к началу эксперимента", requires = "slide", kind = PerkKind.Flag, value = 1, price = 100000, icon = "scales" },
             new PerkDef { id = "fallx2", title = "Тяжёлые грузы", desc = "падение с полки ×2", requires = "fall", kind = PerkKind.StationMult, station = "fall", value = 2, price = 20 },
             new PerkDef { id = "dynax2", title = "Точная шкала", desc = "динамометр ×2 идей", requires = "dyna", kind = PerkKind.StationMult, station = "dyna", value = 2, price = 30 },
-            new PerkDef { id = "act2", title = "Ночная смена", desc = "+2 действия за эксперимент", requires = "friction", kind = PerkKind.Actions, value = 2, price = 25000 },
+            new PerkDef { id = "act2", title = "Ночная смена", desc = "+1 действие за эксперимент", requires = "friction", kind = PerkKind.Actions, value = 1, price = 25000 },
             new PerkDef { id = "springx2", title = "Стальная пружина", desc = "пружина ×2", requires = "spring", kind = PerkKind.StationMult, station = "spring", value = 2, price = 2000 },
             new PerkDef { id = "auto1", title = "Слаженная работа", desc = "автоматика срабатывает 2 раза за действие", requires = "spring", kind = PerkKind.AutoMult, value = 1, price = 6000 },
-            new PerkDef { id = "act3", title = "Сверхурочные", desc = "+2 действия за эксперимент", requires = "density", kind = PerkKind.Actions, value = 2, price = 300000 },
+            new PerkDef { id = "act3", title = "Сверхурочные", desc = "+1 действие за эксперимент", requires = "density", kind = PerkKind.Actions, value = 1, price = 300000 },
             new PerkDef { id = "pendx2", title = "Секундомер", desc = "маятник ×2 идей", requires = "pend", kind = PerkKind.StationMult, station = "pend", value = 2, price = 20000 },
             new PerkDef { id = "archx2", title = "Мерный стакан", desc = "ванна ×2 идей", requires = "arch", kind = PerkKind.StationMult, station = "arch", value = 2, price = 100000 },
             new PerkDef { id = "slidex2", title = "Наждак", desc = "работа трения ×2", requires = "slide", kind = PerkKind.StationMult, station = "slide", value = 2, price = 80000 },
@@ -312,52 +311,61 @@ namespace ChalkPhysics
             new PerkDef { id = "gold2", title = "Золотая жила", desc = "ещё +8% к шансу золотого образца", requires = "L:rho", kind = PerkKind.Flag, value = 0.08, price = 25000, icon = "nugget" },
             new PerkDef { id = "census", title = "Полная опись", desc = "+4% к итогу эксперимента за каждый изученный образец, и полностью изученный образец даёт ×1.25", requires = "L:mu", kind = PerkKind.Flag, value = 0.04, price = 100000, icon = "list" },
             new PerkDef { id = "hands2", title = "Третья рука", desc = "перед «Пуском» можно переставить 3 образца вместо 2", requires = "L:d", kind = PerkKind.Flag, value = 3, price = 100000, icon = "hand" },
-            // a taste of what the next era pays with: these two are priced in coulombs, and mechanics has none
+            // what the next epoch pays with: coulombs (and later kilocalories) buy upgrades of the old instruments that
+            // no joule or idea can buy. In mechanics they close their branches; after the revolution the circuit earns them
+            new PerkDef { id = "eldyna", title = "Электровесы", desc = "динамометр ×3 идей", requires = "dyna", kind = PerkKind.StationMult, station = "dyna", value = 3, cost = Cur.C, price = 10, icon = "bolt" },
+            new PerkDef { id = "elfall", title = "Электромагнит", desc = "полка ×3", requires = "fall", kind = PerkKind.StationMult, station = "fall", value = 3, cost = Cur.C, price = 20, icon = "bolt" },
+            new PerkDef { id = "elspring", title = "Электромотор", desc = "пружина ×3", requires = "spring", kind = PerkKind.StationMult, station = "spring", value = 3, cost = Cur.C, price = 100, icon = "bolt" },
+            new PerkDef { id = "elpend", title = "Электроспуск", desc = "маятник ×3 идей", requires = "pend", kind = PerkKind.StationMult, station = "pend", value = 3, cost = Cur.C, price = 300, icon = "bolt" },
+            new PerkDef { id = "elarch", title = "Электронасос", desc = "ванна ×3 идей", requires = "arch", kind = PerkKind.StationMult, station = "arch", value = 3, cost = Cur.C, price = 1000, icon = "bolt" },
             new PerkDef { id = "teaser1", title = "Медная обмотка", desc = "маховик ещё ×4", requires = "fly", kind = PerkKind.StationMult, station = "fly", value = 4, cost = Cur.C, price = 400, icon = "coil" },
             new PerkDef { id = "teaser2", title = "Электрозатяжка", desc = "работа трения ещё ×4", requires = "friction", kind = PerkKind.StationMult, station = "slide", value = 4, cost = Cur.C, price = 300, icon = "bolt" },
 
             // ---------- electricity ----------
-            new PerkDef { id = "box4", title = "Ящик заготовок", desc = "+3 образца в эксперименте", requires = "ohm", domain = 1, kind = PerkKind.Samples, value = 3, cost = Cur.J, price = 20000 },
-            new PerkDef { id = "standx2", title = "Толстые провода", desc = "вся схема ×2", requires = "charge", domain = 1, kind = PerkKind.StationMult, station = "stand", value = 2, cost = Cur.C, price = 2000 },
-            new PerkDef { id = "act5", title = "Научный грант", desc = "+3 действия за эксперимент", requires = "ohm", domain = 1, kind = PerkKind.Actions, value = 3, price = 5000 },
-            new PerkDef { id = "coulx2", title = "Медный анод", desc = "кулонов ×2", requires = "charge", domain = 1, kind = PerkKind.CurMult, cur = Cur.C, value = 2, price = 5000, icon = "charge" },
-            new PerkDef { id = "gold3", title = "Золотые контакты", desc = "+10% к шансу золотого образца", requires = "L:U", domain = 1, kind = PerkKind.Flag, value = 0.1, price = 10000, icon = "nugget" },
-            new PerkDef { id = "crit", title = "Критический опыт", desc = "каждый десятый опыт срабатывает вдвое", requires = "L:t", domain = 1, kind = PerkKind.Flag, value = 2, price = 50000, icon = "bolt" },
-            new PerkDef { id = "standx3", title = "Медная шина", desc = "вся схема ещё ×2", requires = "charge", domain = 1, kind = PerkKind.StationMult, station = "stand", value = 2, cost = Cur.C, price = 40000 },
-            new PerkDef { id = "act7", title = "Ночное дежурство", desc = "+3 действия за эксперимент", requires = "pow", domain = 1, kind = PerkKind.Actions, value = 3, price = 100000 },
-            new PerkDef { id = "coulx3", title = "Электролиз", desc = "кулонов ещё ×2", requires = "cap", domain = 1, kind = PerkKind.CurMult, cur = Cur.C, value = 2, price = 200000, icon = "charge" },
-            new PerkDef { id = "standx4", title = "Серебряные контакты", desc = "вся схема ещё ×2", requires = "coil", domain = 1, kind = PerkKind.StationMult, station = "stand", value = 2, cost = Cur.C, price = 500000 },
+            new PerkDef { id = "box4", title = "Ящик заготовок", desc = "+3 образца в эксперименте", requires = "ohm", domain = 1, kind = PerkKind.Samples, value = 3, cost = Cur.J, price = 2000 },
+            new PerkDef { id = "standx2", title = "Толстые провода", desc = "вся схема ×2", requires = "charge", domain = 1, kind = PerkKind.StationMult, station = "stand", value = 2, cost = Cur.C, price = 30 },
+            new PerkDef { id = "act5", title = "Научный грант", desc = "+1 действие за эксперимент", requires = "ohm", domain = 1, kind = PerkKind.Actions, value = 1, price = 500 },
+            new PerkDef { id = "coulx2", title = "Медный анод", desc = "кулонов ×2", requires = "charge", domain = 1, kind = PerkKind.CurMult, cur = Cur.C, value = 2, price = 50, icon = "charge" },
+            new PerkDef { id = "gold3", title = "Золотые контакты", desc = "+10% к шансу золотого образца", requires = "L:U", domain = 1, kind = PerkKind.Flag, value = 0.1, price = 1000, icon = "nugget" },
+            new PerkDef { id = "crit", title = "Критический опыт", desc = "каждый десятый опыт срабатывает вдвое", requires = "L:t", domain = 1, kind = PerkKind.Flag, value = 2, price = 5000, icon = "bolt" },
+            new PerkDef { id = "standx3", title = "Медная шина", desc = "вся схема ещё ×2", requires = "charge", domain = 1, kind = PerkKind.StationMult, station = "stand", value = 2, cost = Cur.C, price = 400 },
+            new PerkDef { id = "act7", title = "Ночное дежурство", desc = "+1 действие за эксперимент", requires = "pow", domain = 1, kind = PerkKind.Actions, value = 1, price = 10000 },
+            new PerkDef { id = "coulx3", title = "Электролиз", desc = "кулонов ещё ×2", requires = "cap", domain = 1, kind = PerkKind.CurMult, cur = Cur.C, value = 2, price = 3000, icon = "charge" },
+            new PerkDef { id = "standx4", title = "Серебряные контакты", desc = "вся схема ещё ×2", requires = "coil", domain = 1, kind = PerkKind.StationMult, station = "stand", value = 2, cost = Cur.C, price = 5000 },
             // the teaser of the steam era
             new PerkDef { id = "teaser3", title = "Паровой привод", desc = "вся схема ещё ×5", requires = "coil", domain = 1, kind = PerkKind.StationMult, station = "stand", value = 5, cost = Cur.Cal, price = 9000, icon = "heater" },
+            new PerkDef { id = "stfall", title = "Паровой молот", desc = "полка ещё ×3", requires = "fall", kind = PerkKind.StationMult, station = "fall", value = 3, cost = Cur.Cal, price = 30, icon = "heater" },
+            new PerkDef { id = "stspring", title = "Паровой пресс", desc = "пружина ещё ×3", requires = "spring", kind = PerkKind.StationMult, station = "spring", value = 3, cost = Cur.Cal, price = 100, icon = "heater" },
+            new PerkDef { id = "stfly", title = "Паровая турбина", desc = "маховик ещё ×3", requires = "fly", kind = PerkKind.StationMult, station = "fly", value = 3, cost = Cur.Cal, price = 3000, icon = "heater" },
 
             // ---------- heat ----------
-            new PerkDef { id = "box5", title = "Склад образцов", desc = "+4 образца в эксперименте", requires = "heat", domain = 2, kind = PerkKind.Samples, value = 4, cost = Cur.J, price = 1000000 },
-            new PerkDef { id = "heatx2", title = "Мощный ТЭН", desc = "кипятильник ×2", requires = "heat", domain = 2, kind = PerkKind.StationMult, station = "heater", value = 2, price = 300000 },
-            new PerkDef { id = "act6", title = "Госзаказ", desc = "+3 действия за эксперимент", requires = "heat", domain = 2, kind = PerkKind.Actions, value = 3, price = 500000 },
-            new PerkDef { id = "hands3", title = "Паровой пульт", desc = "приборы больше не срабатывают сами: расставь 2 образца и жми «Пуск» — запустятся все сразу", requires = "L:c", domain = 2, kind = PerkKind.Flag, value = 2, price = 500000, icon = "console" },
-            new PerkDef { id = "calmx2", title = "Двойные стенки", desc = "калориметр ×2 идей", requires = "calm", domain = 2, kind = PerkKind.StationMult, station = "calor", value = 2, price = 500000 },
-            new PerkDef { id = "auto2", title = "Конвейер", desc = "автоматика срабатывает ещё +1 раз за действие", requires = "calm", domain = 2, kind = PerkKind.AutoMult, value = 1, price = 1000000 },
-            new PerkDef { id = "enginex2", title = "Двойной котёл", desc = "паровая машина ×2", requires = "carnot", domain = 2, kind = PerkKind.StationMult, station = "engine", value = 2, price = 1500000 },
-            new PerkDef { id = "stoke", title = "Кочегар", desc = "каждый нагрев поднимает температуру стенда вдвое сильнее", requires = "L:dT", domain = 2, kind = PerkKind.Flag, value = 2, price = 2000000, icon = "heater" },
-            new PerkDef { id = "census2", title = "Инвентаризация", desc = "+5% к итогу эксперимента за каждый изученный образец, и полностью изученный образец даёт ×1.25", requires = "calm", domain = 2, kind = PerkKind.Flag, value = 0.05, price = 3000000, icon = "list" },
-            new PerkDef { id = "hands4", title = "Механическая рука", desc = "перед «Пуском» можно переставить 3 образца вместо 2", requires = "L:Tn", domain = 2, kind = PerkKind.Flag, value = 3, price = 5000000, icon = "hand" },
-            new PerkDef { id = "icex2", title = "Сухой лёд", desc = "плавление ×3", requires = "ice", domain = 2, kind = PerkKind.StationMult, station = "ice", value = 3, price = 6000000 },
-            new PerkDef { id = "shine", title = "Золотая лихорадка", desc = "золотой образец даёт ×5 вместо ×3", requires = "L:lam", domain = 2, kind = PerkKind.Flag, value = 5, price = 8000000, icon = "spark" },
-            new PerkDef { id = "heatx3", title = "Спираль из нихрома", desc = "кипятильник ещё ×3", requires = "heat", domain = 2, kind = PerkKind.StationMult, station = "heater", value = 3, price = 10000000 },
-            new PerkDef { id = "auto3", title = "Паровой привод", desc = "автоматика срабатывает ещё +1 раз за действие", requires = "gas", domain = 2, kind = PerkKind.AutoMult, value = 1, price = 15000000 },
-            new PerkDef { id = "enginex3", title = "Пароперегреватель", desc = "паровая машина ещё ×3", requires = "carnot", domain = 2, kind = PerkKind.StationMult, station = "engine", value = 3, price = 20000000 },
-            new PerkDef { id = "gasx2", title = "Длинный шатун", desc = "поршень ×3", requires = "gas", domain = 2, kind = PerkKind.StationMult, station = "piston", value = 3, price = 40000000 },
+            new PerkDef { id = "box5", title = "Склад образцов", desc = "+4 образца в эксперименте", requires = "heat", domain = 2, kind = PerkKind.Samples, value = 4, cost = Cur.J, price = 100000 },
+            new PerkDef { id = "heatx2", title = "Мощный ТЭН", desc = "кипятильник ×2", requires = "heat", domain = 2, kind = PerkKind.StationMult, station = "heater", value = 2, price = 300 },
+            new PerkDef { id = "act6", title = "Госзаказ", desc = "+1 действие за эксперимент", requires = "heat", domain = 2, kind = PerkKind.Actions, value = 1, price = 500 },
+            new PerkDef { id = "hands3", title = "Паровой пульт", desc = "приборы больше не срабатывают сами: расставь 2 образца и жми «Пуск» — запустятся все сразу", requires = "L:c", domain = 2, kind = PerkKind.Flag, value = 2, price = 1000, icon = "console" },
+            new PerkDef { id = "calmx2", title = "Двойные стенки", desc = "калориметр ×2 идей", requires = "calm", domain = 2, kind = PerkKind.StationMult, station = "calor", value = 2, price = 1000 },
+            new PerkDef { id = "auto2", title = "Конвейер", desc = "автоматика срабатывает ещё +1 раз за действие", requires = "calm", domain = 2, kind = PerkKind.AutoMult, value = 1, price = 3000 },
+            new PerkDef { id = "enginex2", title = "Двойной котёл", desc = "паровая машина ×2", requires = "carnot", domain = 2, kind = PerkKind.StationMult, station = "engine", value = 2, price = 3000 },
+            new PerkDef { id = "stoke", title = "Кочегар", desc = "каждый нагрев поднимает температуру стенда вдвое сильнее", requires = "L:dT", domain = 2, kind = PerkKind.Flag, value = 2, price = 5000, icon = "heater" },
+            new PerkDef { id = "census2", title = "Инвентаризация", desc = "+5% к итогу эксперимента за каждый изученный образец, и полностью изученный образец даёт ×1.25", requires = "calm", domain = 2, kind = PerkKind.Flag, value = 0.05, price = 10000, icon = "list" },
+            new PerkDef { id = "hands4", title = "Механическая рука", desc = "перед «Пуском» можно переставить 3 образца вместо 2", requires = "L:Tn", domain = 2, kind = PerkKind.Flag, value = 3, price = 10000, icon = "hand" },
+            new PerkDef { id = "icex2", title = "Сухой лёд", desc = "плавление ×3", requires = "ice", domain = 2, kind = PerkKind.StationMult, station = "ice", value = 3, price = 30000 },
+            new PerkDef { id = "shine", title = "Золотая лихорадка", desc = "золотой образец даёт ×5 вместо ×3", requires = "L:lam", domain = 2, kind = PerkKind.Flag, value = 5, price = 30000, icon = "spark" },
+            new PerkDef { id = "heatx3", title = "Спираль из нихрома", desc = "кипятильник ещё ×3", requires = "heat", domain = 2, kind = PerkKind.StationMult, station = "heater", value = 3, price = 30000 },
+            new PerkDef { id = "auto3", title = "Паровой привод", desc = "автоматика срабатывает ещё +1 раз за действие", requires = "gas", domain = 2, kind = PerkKind.AutoMult, value = 1, price = 100000 },
+            new PerkDef { id = "enginex3", title = "Пароперегреватель", desc = "паровая машина ещё ×3", requires = "carnot", domain = 2, kind = PerkKind.StationMult, station = "engine", value = 3, price = 100000 },
+            new PerkDef { id = "gasx2", title = "Длинный шатун", desc = "поршень ×3", requires = "gas", domain = 2, kind = PerkKind.StationMult, station = "piston", value = 3, price = 300000 },
         };
 
         public static readonly RevolutionDef[] Revolutions =
         {
-            new RevolutionDef { to = 1, cost = 3e7, freeLetters = new[] { "U", "R", "t" } },
-            new RevolutionDef { to = 2, cost = 3e10, freeLetters = new[] { "c", "dT", "m" } },
+            new RevolutionDef { to = 1, cost = 5e4, freeLetters = new[] { "U", "R", "t" } },
+            new RevolutionDef { to = 2, cost = 5e8, freeLetters = new[] { "c", "dT", "m" } },
         };
 
         public static readonly List<GateDef> Gates = new List<GateDef>
         {
-            new GateDef { id = "final", title = "Формула всего", cost = 2e12, domain = 2,
+            new GateDef { id = "final", title = "Формула всего", cost = 1e10, domain = 2,
                 riddle = "Что, если сложить всё, что измерили приборы всех эпох?.. Говорят, мир тогда объяснит сам себя.",
                 hint = "Ψ складывается из F, T, Fа, I, P и η — всех величин, которые измерили приборы" },
         };
@@ -380,6 +388,9 @@ namespace ChalkPhysics
             new[] { "F:spring" },
             new[] { "L:l" },
             new[] { "F:pend" },
+            // the first revolution comes right after the pendulum; the rest of mechanics grows on past it, so it is
+            // played in the electric epoch, beside the circuit, when the mechanics tree has grown back
+            new[] { "R:1" },
             new[] { "L:rho", "L:V" },
             new[] { "F:arch" },
             new[] { "L:dv" },
@@ -389,7 +400,6 @@ namespace ChalkPhysics
             new[] { "F:friction" },
             new[] { "L:I", "L:w" },
             new[] { "F:fly" },
-            new[] { "R:1" },
             // --- electricity: one circuit, a new socket with every theory ---
             new[] { "L:U", "L:R" },
             new[] { "L:t" },

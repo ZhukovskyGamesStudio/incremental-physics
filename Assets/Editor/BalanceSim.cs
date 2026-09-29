@@ -55,6 +55,16 @@ namespace ChalkPhysics.EditorTools
                 sb.AppendLine($"{k,-24} {t[t.Count / 2],7:0.0} min  ({t.First():0.0}..{t.Last():0.0})   lesson {l[l.Count / 2],4}" + (t.Count < runs.Count ? $"   reached in {t.Count}/{runs.Count}" : ""));
             }
             sb.AppendLine();
+            sb.AppendLine("Rhythm of the map (all runs): purchases per visit, visits with nothing bought, the longest dry streak, the biggest burst.");
+            for (int era = 0; era < 3; era++)
+            {
+                var v = runs.SelectMany(r => r.Visits.Where(x => x.era == era)).ToList();
+                if (v.Count == 0) continue;
+                int streak = 0;
+                foreach (var r in runs) { int cur = 0; foreach (var x in r.Visits.Where(x => x.era == era)) { cur = x.buys == 0 ? cur + 1 : 0; streak = Math.Max(streak, cur); } }
+                sb.AppendLine($"epoch {era}: {v.Count / runs.Count} visits per run, {v.Average(x => x.buys):0.0} buys per visit, {100.0 * v.Count(x => x.buys == 0) / v.Count:0}% dry, longest dry streak {streak}, biggest burst {v.Max(x => x.buys)}");
+            }
+            sb.AppendLine();
             sb.AppendLine("First run, experiment by experiment (earned in the run; wallet after the map):");
             foreach (var line in runs[0].Lessons) sb.AppendLine(line);
             return sb.ToString();
@@ -76,7 +86,10 @@ namespace ChalkPhysics.EditorTools
 
             public Run(int seed) { _rng = new System.Random(seed); }
 
-            void Mark(string k) { if (At.ContainsKey(k)) return; At[k] = (_t / 60f, G.Lessons); Order.Add(k); }
+            void Mark(string k) { _bought.Add(k.Substring(k.IndexOf(' ') + 1)); if (At.ContainsKey(k)) return; At[k] = (_t / 60f, G.Lessons); Order.Add(k); }
+            // the rhythm of the map: what was bought on every visit (letter levels counted too)
+            readonly List<string> _bought = new List<string>();
+            public readonly List<(int era, int buys, int lesson)> Visits = new List<(int, int, int)>();
 
             public Run Play()
             {
@@ -104,6 +117,8 @@ namespace ChalkPhysics.EditorTools
             // ---------------- the map ----------------
             void Break()
             {
+                _bought.Clear();
+                int era = G.Era;
                 // theories: every open one is solved, letter by letter
                 for (int guard = 0; guard < 50; guard++)
                 {
@@ -121,6 +136,8 @@ namespace ChalkPhysics.EditorTools
                     if (f == null) break;
                     foreach (var s in f.Slots().ToList()) { if (!G.IsFilled(f.id, s)) { G.Place(f.id, s, s); _t += SlotSec; } }
                 }
+                if (G.Lessons > 0) Visits.Add((era, _bought.Count, G.Lessons));
+                if (Run0 && G.Lessons > 0) Lessons.Add("        map: " + (_bought.Count == 0 ? "-" : string.Join(" ", _bought)));
             }
 
             /// The same shopping as AutoPlayBot.Spend.
@@ -172,6 +189,7 @@ namespace ChalkPhysics.EditorTools
                     }
                     if (best == null) break;
                     G.Upgrade(best);
+                    _bought.Add(Defs.L(best).sym + "+");
                 }
             }
 
@@ -275,7 +293,7 @@ namespace ChalkPhysics.EditorTools
                 if (pick == null && G.Built("dyna") && !G.Automated("dyna") && unknown.Count > 0 && G.Samples.Count - unknown.Count < 2)
                 { pick = "dyna"; sample = unknown[_rng.Next(unknown.Count)]; }
                 // 2b. keep the steam bench warm
-                if (pick == null && G.Built("heat") && !G.Automated("heater") && G.Boiler < 0.55f)
+                if (pick == null && G.Built("heat") && !G.Automated("heater") && G.Boiler < 0.55f && (G.Built("engine") || G.Built("ice") || G.Built("gas")))
                 { sample = G.BestSampleFor(Defs.F("heat"), Free); if (sample != null) pick = "heater"; }
                 // 3. the manual stations in turn
                 if (pick == null)
