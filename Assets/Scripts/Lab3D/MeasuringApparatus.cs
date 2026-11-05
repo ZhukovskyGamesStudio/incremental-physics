@@ -56,7 +56,7 @@ namespace ChalkPhysics.Lab3D
 
         /// A damped spring, `x` going to `target` at `hz` with its overshoot, the frame in small steps: a slow or
         /// fast-forwarded frame must not slow it down (the dynamometer's pointer, the measuring cylinder's water).
-        protected static void Settle(ref float x, ref float v, float target, float hz, float damping, float deltaTime)
+        public static void Settle(ref float x, ref float v, float target, float hz, float damping, float deltaTime)
         {
             float w = 2 * Mathf.PI * hz;
             int n = Mathf.Clamp(Mathf.CeilToInt(deltaTime * 240), 1, 60);
@@ -70,6 +70,6 @@ namespace ChalkPhysics.Lab3D
         }
 
         /// Close enough to `target` and hardly moving: still.
-        protected static bool AtRest(float x, float v, float target) => Mathf.Abs(x - target) < 0.0015f && Mathf.Abs(v) < 0.01f;
+        public static bool AtRest(float x, float v, float target) => Mathf.Abs(x - target) < 0.0015f && Mathf.Abs(v) < 0.01f;
     }
 }

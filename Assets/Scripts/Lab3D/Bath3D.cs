@@ -40,6 +40,8 @@ namespace ChalkPhysics.Lab3D
         float _calm, _tankLevel, _wobble, _rate;
         /// How fast the spout lets the water out: litres a second for a litre standing over it (and as the root of it).
         public float pourRate = 0.22f;
+        /// Litres a second out of the spout with `over` litres still standing over it: the root of the head, and drops at the end.
+        public static float PourRate(float over, float k) => Mathf.Max(0.006f, k * Mathf.Sqrt(Mathf.Max(0, over)));
         /// The water is still running out of the spout (the check waits for it).
         public bool Pouring => _rate > 0;
         bool _wasIn;
@@ -142,7 +144,7 @@ namespace ChalkPhysics.Lab3D
             float before = _cyl;
             // out of a narrow spout the water runs the slower the less of it stands over the spout: a litre in about nine
             // seconds, three in a quarter of a minute, the last of it in drops
-            if (want > _cyl) { _rate = Mathf.Max(0.006f, pourRate * Mathf.Sqrt(want - _cyl)); _cyl = Mathf.MoveTowards(_cyl, want, _rate * dt); }
+            if (want > _cyl) { _rate = PourRate(want - _cyl, pourRate); _cyl = Mathf.MoveTowards(_cyl, want, _rate * dt); }
             else
             {
                 _rate = 0;

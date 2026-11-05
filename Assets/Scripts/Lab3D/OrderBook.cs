@@ -10,10 +10,12 @@ namespace ChalkPhysics.Lab3D
     {
         /// How long a customer waits for its order, from the window to the parcel, in seconds of the day: 45, and 35 more
         /// for every question on the sheet.
-        public static float PatienceFor(OrderSheet sheet) => 45 + 35 * Mathf.Max(1, sheet.tests.Count);
+        public static float PatienceFor(OrderSheet sheet) => PatienceFor(sheet.tests.Count);
+        public static float PatienceFor(int questions) => 45 + 35 * Mathf.Max(1, questions);
         /// The tip for a quick order: up to half its reward, as much of it as the customer's patience is left (and the
         /// answers are right).
         public const double TipShare = 0.5;
+        public static int Tip(int reward, double hurry, double accuracy) => (int)System.Math.Round(reward * TipShare * hurry * accuracy);
         /// All the customers lost, and all the tips, since the game began (the check's log, day by day).
         public static int LostAll, TipsAll;
 
@@ -146,7 +148,7 @@ namespace ChalkPhysics.Lab3D
             }
             accuracy /= Mathf.Max(1, sheet.tests.Count);
             int coins = (int)System.Math.Round(sheet.reward * accuracy);
-            LastTip = (int)System.Math.Round(sheet.reward * TipShare * hurry * accuracy);   // quick and right: a tip
+            LastTip = Tip(sheet.reward, hurry, accuracy);   // quick and right: a tip
             coins += LastTip;
             TipsAll += LastTip;
             sheet.sent = true;

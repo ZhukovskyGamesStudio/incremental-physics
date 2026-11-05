@@ -66,12 +66,14 @@ namespace ChalkPhysics.Lab3D
 
         /// When the n-th customer of the day (from 0) comes: the first at once, the last at 0.8 of the day; the gaps are a
         /// third as long at noon as in the morning and the evening.
-        float ArrivalTime(int n)
+        float ArrivalTime(int n) => Timetable(n, G.OrdersPerDay, Day.length);
+
+        /// The timetable itself: when the n-th of `all` customers comes in a day `length` seconds long.
+        public static float Timetable(int n, int all, float length)
         {
-            int all = Mathf.Max(1, G.OrdersPerDay);
-            float u = Mathf.Clamp01(n / (float)all);
+            float u = Mathf.Clamp01(n / (float)Mathf.Max(1, all));
             float f = u + 0.5f * Mathf.Sin(2 * Mathf.PI * u) / (2 * Mathf.PI);
-            return 0.8f * Day.length * f;
+            return 0.8f * length * f;
         }
 
         /// A customer brings the order: one of them who is free, along the corridor to the window. The sheet is dealt now

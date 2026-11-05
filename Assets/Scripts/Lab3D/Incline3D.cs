@@ -39,11 +39,14 @@ namespace ChalkPhysics.Lab3D
         {
             Roll();
             double mu = s.data != null ? s.data.mu : 0.5;
-            _slipAt = Mathf.Min(maxAngle - 1, (float)(System.Math.Atan(mu * (1 + Bias)) * 180 / System.Math.PI));
+            _slipAt = SlipAngle(mu, Bias, maxAngle);
             _slid = false;
             _lowering = _angle > 0.01f;   // a raised board comes down first
             if (_mark != null) _mark.gameObject.SetActive(false);
         }
+
+        /// Where a sample of friction `mu` gives way on a board off by `bias`: the arctangent, short of the board's top.
+        public static float SlipAngle(double mu, float bias, float maxAngle) => Mathf.Min(maxAngle - 1, (float)(System.Math.Atan(mu * (1 + bias)) * 180 / System.Math.PI));
 
         Transform _mark;
 
