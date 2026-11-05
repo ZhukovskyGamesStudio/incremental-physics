@@ -46,7 +46,7 @@ namespace ChalkPhysics
             _sym = ChalkTex.Math(UIF.Text(transform, D.sym, 48, ChalkTex.White, new Vector2(0, (alchemy ? 10 : 22) + ChalkTex.DescentLift(D.sym, 48)), new Vector2(TW + 20, 58)));
             _val = Fit(UIF.Text(transform, "", 20, ChalkTex.Dim, new Vector2(0, alchemy ? -28 : -12), new Vector2(TW - 30, 24)), 12, 20);
             _cost = Fit(UIF.Text(transform, "", 21, ChalkTex.Yellow, new Vector2(0, -33), new Vector2(TW - 48, 22)), 12, 21);
-            if (D.openCur == Cur.Obs || D.cost == Cur.Obs) { _ink = InkText.On(_cost); _cost.fontSize = Mathf.RoundToInt(18 * ChalkTex.FontScale); }
+            if (D.openCur is Cur.Obs or Cur.Coin || D.cost == Cur.Obs) { _ink = InkText.On(_cost); _cost.fontSize = Mathf.RoundToInt(18 * ChalkTex.FontScale); }
             _appear = 0;
         }
 
@@ -103,7 +103,7 @@ namespace ChalkPhysics
                 afford = cost >= 0 && G.CanUpgrade(Id);
                 if (fixedV) { _val.text = "разная"; SetCost(""); }
                 else if (derived) { _val.text = G.LetterValue(Id); SetCost(""); }
-                else if (!G.UpgradesOpen) { _val.text = G.LetterValue(Id); SetCost(""); }     // levels come with the first joules
+                else if (!G.UpgradesOpen || GameState.Day3D) { _val.text = G.LetterValue(Id); SetCost(""); }     // levels come with the first joules; none in the 3D lab yet
                 else if (cost < 0) { _val.text = G.LetterValue(Id); SetCost("макс."); _cost.color = ChalkTex.Dim; }
                 else
                 {
@@ -194,7 +194,7 @@ namespace ChalkPhysics
                 FX.I.Dust(_host.Content, FixedPos, ChalkTex.Yellow, 14, 220f);
                 _host.Inspect(Id);
             }
-            else { Sfx.Play("nope", 0.4f); FX.I.Text(_host.Content, FixedPos + new Vector2(0, 70), D.openCur == Cur.Cal ? "не хватает килокалорий — проведи эксперимент" : D.openCur == Cur.Obs ? "не хватает идей — проведи эксперимент" : "не хватает джоулей — проведи эксперимент", ChalkTex.Red, 24, 1.6f); }
+            else { Sfx.Play("nope", 0.4f); FX.I.Text(_host.Content, FixedPos + new Vector2(0, 70), D.openCur == Cur.Coin ? "не хватает монет — выполни заказы" : D.openCur == Cur.Cal ? "не хватает килокалорий — проведи эксперимент" : D.openCur == Cur.Obs ? "не хватает идей — проведи эксперимент" : "не хватает джоулей — проведи эксперимент", ChalkTex.Red, 24, 1.6f); }
         }
 
         public void OnPointerDown(PointerEventData e) { _pressed = true; _dragging = false; _holdT = 0; _repeatT = 0; }

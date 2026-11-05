@@ -19,6 +19,8 @@ namespace ChalkPhysics
 
     /// Entry point: builds the whole UGUI scene from code. Three screens: the map (tree of upgrades), the alchemy
     /// (finding formulas) and the lesson (bench). The map and the alchemy are the break; the bell always leads to the map.
+    /// With day3D the lesson is a working day in the 3D lab (scene Lab3D): the map saves and hands over to it, and the
+    /// door of the lab saves and brings the player back here (DESIGN.md 2б).
     public class GameRoot : MonoBehaviour
     {
         public static GameRoot I;
@@ -29,6 +31,15 @@ namespace ChalkPhysics
         public bool autoPlayBot;
         [Tooltip("Dev only: Time.timeScale")]
         public float timeScale = 1f;
+        [Tooltip("The run is a day in the 3D lab (scene Lab3D) instead of the 2D bench")]
+        public bool day3D = true;
+        public const string DayScene = "Lab3D", MapScene = "Game";
+
+        /// The words on the map's start button.
+        public static string StartLabel(GameState g) => I != null && I.Day3D
+            ? $"▶ День {g.Lessons + 1}  (8:00–{8 + g.DayHours}:00)"
+            : $"▶ Эксперимент {g.Lessons + 1}  ({g.LevelSeconds:0} с)";
+        bool Day3D => day3D && !autoPlayBot;   // the 2D bot and the balance plays keep the 2D bench
 
         enum BreakScreen { Map, Alchemy }
 
@@ -42,7 +53,9 @@ namespace ChalkPhysics
         Lab _lab;
         Alchemy _alchemy;
         MainMenu _menu;
-        static bool _booted;                          // the splash and the menu greet a fresh start, not a "new game"
+        public static bool Booted;
+        /// The map comes after a day: it comes out of the veil the day went into.
+        public static bool FromDay;                    // the splash and the menu greet a fresh start, not a "new game" or a day's end
         BreakScreen _breakScreen = BreakScreen.Map;
         bool _ending, _dontSave;
 
@@ -56,6 +69,7 @@ namespace ChalkPhysics
             gameObject.AddComponent<Music>();
             FontWarmup.Attach(gameObject);               // the game's own font: letters ready before any label
             GameState.DevSpeed = devSpeed;
+            if (Day3D) GameState.Use3D(); else GameState.Day3D = false;
             G = new GameState();
 
             var cam = Camera.main;
@@ -111,11 +125,15 @@ namespace ChalkPhysics
             G.LessonEnded += OnBell;
             ApplyPhase();
             if (G.Won) StartCoroutine(Ending(true));
-            if (autoPlayBot || _booted) _menu.Hide();
+            if (autoPlayBot || Booted) _menu.Hide();
             if (autoPlayBot) gameObject.AddComponent<AutoPlayBot>();
-            else if (!_booted) Splash.Show(_root, null);   // the studio's mark first, then the menu under it
-            _booted = true;
+            else if (!Booted) Splash.Show(_root, null);   // the studio's mark first, then the menu under it
+            if (FromDay) { FromDay = false; StartCoroutine(Unveil()); }
+            // a smoke run of the build (-autoday): no menu, straight into the day, to see its scene load
+            bool autoDay = !Booted && System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-autoday") >= 0;
+            Booted = true;
             Time.timeScale = timeScale;
+            if (autoDay && Day3D && G.AnyStation && G.Phase != Phase.Lesson) { _menu.Hide(); StartLesson(false); }
         }
 
         /// The main menu over whatever screen the game is on; "Играть" lifts it with the usual curtain.
@@ -140,14 +158,24 @@ namespace ChalkPhysics
             _alchemyRt.gameObject.SetActive(!lesson && _breakScreen == BreakScreen.Alchemy);
         }
 
-        public void StartLesson()
+        /// The start of a run. With more instruments than places on the bench the player first picks what goes on it
+        /// (the guest comes on its own); pick = false skips the choice and keeps the last one (the bot).
+        public void StartLesson(bool pick = true)
         {
             if (G.Phase == Phase.Lesson || _switching || G.Won || !G.AnyStation) return;
+            if (Day3D)
+            {   // every instrument has its own table in the lab: nothing to pick
+                G.Save();
+                Sfx.Play("whoosh", 0.3f, 0.8f);
+                StartCoroutine(Switch(() => SceneManager.LoadScene(DayScene), 0.6f));
+                return;
+            }
+            if (pick && G.BuiltStations().Count > G.OwnSlots + 1) { ShowBenchPicker(); return; }   // everything fits (with the guest): no choice to make
+            G.PickBench();
             Sfx.Play("whoosh", 0.3f, 0.8f);
             StartCoroutine(Switch(() =>
             {
                 G.StartLesson();
-                FX.I.Text(_root, new Vector2(0, 300), $"Эксперимент {G.Lessons + 1}", ChalkTex.White, 56, 1.8f);
             }));
         }
 
@@ -180,7 +208,22 @@ namespace ChalkPhysics
         Image _veil;
 
         /// A short curtain between screens: the board darkens, the screens swap, it lifts again.
-        IEnumerator Switch(System.Action atMidpoint)
+        IEnumerator Unveil()
+        {
+            if (_veil == null)
+            {
+                _veil = UIF.Fill("Veil", _root).gameObject.AddComponent<Image>();
+                _veil.color = new Color(ChalkTex.BoardColor.r, ChalkTex.BoardColor.g, ChalkTex.BoardColor.b, 1);
+            }
+            _veil.transform.SetSiblingIndex(_world.GetSiblingIndex() + 1);
+            SetVeil(1);
+            yield return null;
+            for (float t = 0; t < 0.8f; t += Time.deltaTime) { SetVeil(1 - Mathf.SmoothStep(0, 1, t / 0.8f)); yield return null; }
+            SetVeil(0);
+            _veil.raycastTarget = false;
+        }
+
+        IEnumerator Switch(System.Action atMidpoint, float down = 0.28f)
         {
             _switching = true;
             if (_veil == null)
@@ -190,7 +233,7 @@ namespace ChalkPhysics
             }
             _veil.transform.SetSiblingIndex(_world.GetSiblingIndex() + 1);
             _veil.raycastTarget = true;
-            for (float t = 0; t < 0.28f; t += Time.deltaTime) { SetVeil(Mathf.SmoothStep(0, 1, t / 0.28f)); yield return null; }
+            for (float t = 0; t < down; t += Time.deltaTime) { SetVeil(Mathf.SmoothStep(0, 1, t / down)); yield return null; }
             SetVeil(1);
             atMidpoint?.Invoke();
             ApplyPhase();
@@ -286,6 +329,16 @@ namespace ChalkPhysics
             Sfx.Play("click");
             var rev = G.NextRevolution;
             string dom = Defs.DomainNames[rev.to];
+            if (GameState.Day3D)
+            {   // the 3D lab has only its first epoch for now (DESIGN.md 2б): the revolution is where it ends
+                var e = Overlay("Revolution", 0.97f);
+                _dialog = e.parent.gameObject;
+                UIF.Shape(e, 71).Rect(Vector2.zero, new Vector2(1160, 520), ChalkTex.White, 5f);
+                UIF.Text(e, "Механика построена!", 60, ChalkTex.Pink, new Vector2(0, 170), new Vector2(1100, 80));
+                UIF.Text(e, $"Первая эпоха пройдена за {G.Lessons} дн. Электричество — в следующей версии.", 34, ChalkTex.White, new Vector2(0, 20), new Vector2(1080, 160));
+                DialogButton(e, new Vector2(0, -170), "Работать дальше", ChalkTex.Yellow, () => { Sfx.Play("click"); Destroy(_dialog); _dialog = null; });
+                return;
+            }
             var c = Overlay("Revolution", 0.97f);
             _dialog = c.parent.gameObject;
             var fr = UIF.Shape(c, 71);
@@ -300,8 +353,8 @@ namespace ChalkPhysics
                 $"<color=#8CFF99>Потом:</color> лаборатория растёт заново из {(rev.to == 1 ? "двух начал" : "трёх начал")} — старые ветки можно прокачать снова, а рядом начинается новая.\n" +
                 $"<color=#73DBFF>Сразу:</color> первые величины новой эпохи — {free}.\n\n" +
                 (rev.to == 1
-                    ? "Весь стенд станет одной электрической схемой: образцы вставляются в её гнёзда, и с каждой новой теорией схема растёт — и просит ещё один образец. Автоматизировать её нельзя. Первый же опыт даст <color=#BF99FF>кулоны</color>."
-                    : "Стенд станет паровым: у него появится температура. Каждый нагрев разогревает его, каждое действие остужает — а машина, поршень и лёд работают тем сильнее, чем он горячее. Новая валюта — <color=#FF8C66>килокалории</color>.");
+                    ? "Появится электрическая схема: образцы вставляются в её гнёзда, и с каждой новой теорией схема растёт — и просит ещё один образец. Первый же опыт даст <color=#BF99FF>кулоны</color>."
+                    : "У стенда появится температура: каждый нагрев разогревает его, а сам он остывает — машина, поршень и лёд работают тем сильнее, чем он горячее. Новая валюта — <color=#FF8C66>килокалории</color>.");
             UIF.Text(c, body, 26, ChalkTex.White, new Vector2(0, -5), new Vector2(1080, 290));
             DialogButton(c, new Vector2(-200, -230), "Революция!", ChalkTex.Yellow, () =>
             {
@@ -311,6 +364,71 @@ namespace ChalkPhysics
                 StartCoroutine(Wipe(dom));
             });
             DialogButton(c, new Vector2(200, -230), "Позже", ChalkTex.Dim, () => { Sfx.Play("click"); Destroy(_dialog); _dialog = null; });
+        }
+
+        // ---------------- the bench of the next run ----------------
+        static string StationName(string st) => st == "stand" ? "Электрическая схема" : st == "engine" ? "Паровая машина" : Defs.Formulas.Find(f => f.station == st).title;
+
+        /// Cards of every instrument the player has: tap to put it on the bench (as many as there are own places);
+        /// the last place is the guest's — a random one of the rest, a new instrument first.
+        void ShowBenchPicker()
+        {
+            if (_dialog != null) return;
+            Sfx.Play("click");
+            var all = G.BuiltStations();
+            var sel = new System.Collections.Generic.List<string>();
+            foreach (var x in G.Loadout) if (all.Contains(x) && sel.Count < G.OwnSlots) sel.Add(x);
+            for (int i = all.Count - 1; i >= 0 && sel.Count < G.OwnSlots; i--) if (!sel.Contains(all[i]) && !G.IsNew(all[i])) sel.Add(all[i]);
+            var c = Overlay("Bench", 0.97f);
+            _dialog = c.parent.gameObject;
+            UIF.Text(c, "Что поставить на стол?", 54, ChalkTex.White, new Vector2(0, 330), new Vector2(1400, 70));
+            var count = UIF.Text(c, "", 28, ChalkTex.Dim, new Vector2(0, 270), new Vector2(1400, 40));
+            const float W = 210, Gap = 26;
+            int n = all.Count;
+            int perRow = Mathf.Min(n, 6);
+            var frames = new System.Collections.Generic.Dictionary<string, ChalkShape>();
+            void Refresh()
+            {
+                count.text = $"своих мест: {sel.Count} из {G.OwnSlots}   ·   ещё одно место — случайный прибор";
+                foreach (var kv in frames)
+                {
+                    bool on = sel.Contains(kv.Key);
+                    kv.Value.Clear();
+                    kv.Value.Rect(Vector2.zero, new Vector2(W - 10, W - 10), on ? ChalkTex.Yellow : new Color(1, 1, 1, 0.45f), on ? 5f : 2.5f);
+                    if (on) { kv.Value.Line(new Vector2(62, 70), new Vector2(72, 60), ChalkTex.Yellow, 4f); kv.Value.Line(new Vector2(72, 60), new Vector2(90, 86), ChalkTex.Yellow, 4f); }
+                }
+            }
+            for (int i = 0; i < n; i++)
+            {
+                var st = all[i];
+                int row = i / perRow, col = i % perRow, inRow = Mathf.Min(perRow, n - row * perRow);
+                var pos = new Vector2((col - (inRow - 1) / 2f) * (W + Gap), 90 - row * (W + Gap));
+                var card = UIF.Rect("Card", c, pos, new Vector2(W, W));
+                UIF.Catcher(card);
+                frames[st] = UIF.Shape(card, 80 + i);
+                var ic = UIF.Shape(card, 120 + i);
+                ic.rectTransform.anchoredPosition = new Vector2(0, 22);
+                Lab.DrawIcon(ic, Defs.StationIcon(st), ChalkTex.White, 2.2f);
+                LetterTile.Fit(UIF.Text(card, StationName(st), 24, ChalkTex.White, new Vector2(0, -66), new Vector2(W - 20, 50)), 14, 24);
+                if (G.IsNew(st)) UIF.Text(card, "новый — встанет случайным", 18, ChalkTex.Pink, new Vector2(0, -W / 2 - 18), new Vector2(W + 40, 26));
+                var cl = card.gameObject.AddComponent<Clickable>();
+                cl.onClick = () =>
+                {
+                    if (sel.Contains(st)) sel.Remove(st);
+                    else { sel.Add(st); if (sel.Count > G.OwnSlots) sel.RemoveAt(0); }
+                    Sfx.Play("tick", 0.5f, 1.2f);
+                    Refresh();
+                };
+                cl.onHover = h => card.localScale = Vector3.one * (h ? 1.05f : 1f);
+            }
+            Refresh();
+            DialogButton(c, new Vector2(-200, -380), "▶ Начать", ChalkTex.Yellow, () =>
+            {
+                Destroy(_dialog); _dialog = null;
+                G.Loadout.Clear(); G.Loadout.AddRange(sel);
+                StartLesson(false);
+            });
+            DialogButton(c, new Vector2(200, -380), "Назад", ChalkTex.Dim, () => { Sfx.Play("click"); Destroy(_dialog); _dialog = null; });
         }
 
         IEnumerator Wipe(string dom)

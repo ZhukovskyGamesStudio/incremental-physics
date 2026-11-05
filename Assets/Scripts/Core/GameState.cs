@@ -13,8 +13,8 @@ namespace ChalkPhysics
     [Serializable]
     public class SaveData
     {
-        public double[] cur = new double[4];
-        public double[] total = new double[4];
+        public double[] cur = new double[GameState.NCur];
+        public double[] total = new double[GameState.NCur];
         public float time;
         public int revolutions, lessons;
         public bool won, muted;
@@ -23,6 +23,9 @@ namespace ChalkPhysics
         public List<int> builtVals = new List<int>();
         public List<string> lvlIds = new List<string>();
         public List<int> lvlVals = new List<int>();
+        public int helpers, rank;
+        public List<string> loadout = new List<string>();
+        public CareerData career = new CareerData();   // the goals between the days (Career)
     }
 
     /// A specimen from the box: hidden mass and volume until measured.
@@ -35,6 +38,11 @@ namespace ChalkPhysics
         public bool Knows(string prop) => prop == "m" ? knowM : prop == "V" ? knowV : prop == "mu" ? knowMu : true;
         public bool Floats => massR / volR < 1.2;
         public int uses;
+        /// The 3D lab's odd measurements (DESIGN.md 2б, «Крейзи-измерения»): its tastes (a bit each: sweet, salty, sour,
+        /// bitter, umami), the fish that bites on it (0..4, 5 — nobody), what the cat does (purrs, hisses, plays, sleeps on),
+        /// the note it rings (0..6, do to si); does it glow in the dark, show in a mirror, giggle when tickled.
+        public int taste, fish, cat, note;
+        public bool glows, reflects = true, ticklish;
         /// Instruments this very specimen has already run on: only there may its result be shown in advance.
         public readonly HashSet<string> seenAt = new HashSet<string>();
     }
@@ -47,13 +55,18 @@ namespace ChalkPhysics
     {
         public static GameState I;
         public static float DevSpeed = 1f;
-        public const int BaseActions = 3;
+        /// A run lasts this long before the seconds bought on the map.
+        public const float BaseSeconds = 15f;
 
-        public readonly double[] Cur = new double[4];
-        public readonly double[] Total = new double[4];
-        public readonly double[] LessonEarned = new double[4];
+        /// How many currencies there are (Cur): joules, ideas, coulombs, kilocalories, coins.
+        public const int NCur = 5;
+        public readonly double[] Cur = new double[NCur];
+        public readonly double[] Total = new double[NCur];
+        public readonly double[] LessonEarned = new double[NCur];
         public float PlayTime;
-        public int Revolutions, Lessons, ActionsLeft;
+        public int Revolutions, Lessons;
+        /// Seconds left in the run; when they run out the bell rings.
+        public float TimeLeft;
         public bool Won;
         public Phase Phase = Phase.Break;
 
@@ -63,6 +76,20 @@ namespace ChalkPhysics
         public readonly HashSet<string> Gates = new HashSet<string>();
         public readonly HashSet<string> Used = new HashSet<string>();      // bench hints stop after the first use
         public readonly List<string> Known = new List<string>();           // opened letters
+        // ---- the live run: up to four instruments on the bench — the player's own places and one guest
+        /// The instruments on the bench in this run (the player's picks and the guest).
+        public readonly List<string> Bench = new List<string>();
+        /// The guest of this run: a random instrument the player did not pick (null when there is none).
+        public string Guest;
+        /// What the player picked for their own places last time; the next run starts from the same choice.
+        public readonly List<string> Loadout = new List<string>();
+        /// Chalk helpers the player has: each finished task brings one. They outlive revolutions.
+        public int Helpers;
+        /// The qualification: every formula assembled right on the bench is a point; enough points in a row make the next
+        /// rank, and a mistake sends the rank a step back.
+        public int RankPts;
+        /// The 3D lab's goals between the days: the grant, the regulars, the contract, the rival (Career).
+        public CareerData Career = new CareerData();
         public readonly Dictionary<string, HashSet<string>> Filled = new Dictionary<string, HashSet<string>>();   // puzzle: formula -> letters placed
         public readonly Dictionary<string, int> Wrong = new Dictionary<string, int>();                            // puzzle: "formula:slot" -> misses
         public readonly Dictionary<string, int> BuiltAt = new Dictionary<string, int>();   // formula -> Lessons when it was found
@@ -79,16 +106,20 @@ namespace ChalkPhysics
         public event Action<int> RevolutionDone;
 
         // the save's name changes whenever old saves would no longer make sense (8: the rebalance of every epoch)
-        static string SavePath => Path.Combine(Application.persistentDataPath, "chalk_save9.json");
+        static string SavePath => Path.Combine(Application.persistentDataPath, "chalk_save10.json");
         // in a browser the save lives in PlayerPrefs (IndexedDB), which is flushed for sure on Save()
-        const string SaveKey = "chalk_save9";
+        const string SaveKey = "chalk_save10";
         static bool Web => Application.platform == RuntimePlatform.WebGLPlayer;
         /// The balance simulation (Editor/BalanceSim) plays in a sandbox: no save is read or written, and the boxes
         /// of specimens come from a seeded generator so that runs can be compared.
         public static bool Sandbox;
         public static System.Random SandboxRng;
-        static void WriteSave(string json) { if (Sandbox) return; if (Web) { PlayerPrefs.SetString(SaveKey, json); PlayerPrefs.Save(); } else File.WriteAllText(SavePath, json); }
-        static string ReadSave() => Sandbox ? null : Web ? PlayerPrefs.GetString(SaveKey, "") : File.Exists(SavePath) ? File.ReadAllText(SavePath) : null;
+        /// The 3D check (Editor/Lab3DCheck) goes between the map and the day as the player does, through the save; it keeps
+        /// that save in memory, so that the player's own one is never touched.
+        public static bool MemorySave;
+        static string _memory;
+        static void WriteSave(string json) { if (MemorySave) { _memory = json; return; } if (Sandbox) return; if (Web) { PlayerPrefs.SetString(SaveKey, json); PlayerPrefs.Save(); } else File.WriteAllText(SavePath, json); }
+        static string ReadSave() => MemorySave ? _memory : Sandbox ? null : Web ? PlayerPrefs.GetString(SaveKey, "") : File.Exists(SavePath) ? File.ReadAllText(SavePath) : null;
 
         public GameState()
         {
@@ -98,9 +129,10 @@ namespace ChalkPhysics
 
         public void NewGame()
         {
-            for (int i = 0; i < 4; i++) Cur[i] = Total[i] = 0;
+            for (int i = 0; i < NCur; i++) Cur[i] = Total[i] = 0;
             PlayTime = 0; Revolutions = 0; Lessons = 0; Won = false;
             Proven.Clear(); Known.Clear(); Devices.Clear(); Perks.Clear(); Gates.Clear(); Used.Clear(); Filled.Clear(); Wrong.Clear(); BuiltAt.Clear(); _lvl.Clear();
+            Bench.Clear(); Loadout.Clear(); Guest = null; Helpers = 0; RankPts = 0; Career = new CareerData();
             Phase = Phase.Break;
         }
 
@@ -144,7 +176,7 @@ namespace ChalkPhysics
         }
 
         /// A letter of an epoch the lab has not reached cannot be levelled.
-        public bool CanUpgrade(string id) => Known.Contains(id) && !Defs.L(id).Derived && !Defs.L(id).perSample && Defs.L(id).domain <= Era && UpgradesOpen && !AtLimit(id) && Cur[(int)Defs.L(id).cost] >= UpgradeCost(id);
+        public bool CanUpgrade(string id) => !Day3D && Known.Contains(id) && !Defs.L(id).Derived && !Defs.L(id).perSample && Defs.L(id).domain <= Era && UpgradesOpen && !AtLimit(id) && Cur[(int)Defs.L(id).cost] >= UpgradeCost(id);
 
         public bool Upgrade(string id)
         {
@@ -175,15 +207,126 @@ namespace ChalkPhysics
         public bool AnyStation { get { foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0) return true; return false; } }
 
         // ---------------- bench parameters ----------------
-        public int MaxActions { get { int n = BaseActions; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Actions) n += (int)d.value; } return n; } }
-        /// How many times an automaton fires per action: once, plus one for every "+1 раз" perk.
-        public double AutoMult { get { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.AutoMult) m += d.value; } return m; } }
+        double PerkSum(PerkKind k) { double n = 0; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == k) n += d.value; } return n; }
+        /// How long a run lasts: 15 seconds and whatever the map has added.
+        public float LevelSeconds => BaseSeconds + (float)PerkSum(PerkKind.Seconds);
+
+        // ---- the 3D lab (DESIGN.md 2б): a run is a working day there, and the map sells what that day can use
+        /// The run is a day in the 3D lab (set by GameRoot and the lab). The balance plays and the 2D bot keep it false.
+        public static bool Day3D;
+        /// A working day is from eight to six, and every perk of seconds makes it longer by hours: two for 3 s, three
+        /// for 5 s — the same share of the day as of a 15-second run.
+        public const float SecondsPerHour = 12;
+        public static int HoursOf(PerkDef p) => (int)Math.Round(p.value * 2 / 3);
+        public int DayHours { get { int h = 10; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Seconds) h += HoursOf(d); } return h; } }
+        public float DaySeconds => DayHours * SecondsPerHour;
+        /// What the map offers: in the 3D lab every instrument has its own table, and there is neither a random
+        /// instrument nor tasks, so the perks for those would buy nothing (DESIGN.md 2, «Ни одной бесполезной покупки»).
+        /// In the 3D lab only the order sheets' loop is played for now (DESIGN.md 2б, «Листки-заказы»): the map sells what
+        /// coins buy, and nothing else.
+        public static bool InPlay(PerkDef p) => Day3D ? p.cost == ChalkPhysics.Cur.Coin : !p.lab3D;
+        public static string PerkTitle(PerkDef p) => Day3D && p.id == "act0" ? "Лишние часы" : p.title;
+        public static string PerkDesc(PerkDef p) => Day3D && p.kind == PerkKind.Seconds ? $"+{HoursOf(p)} ч к рабочему дню" : p.desc;
+        // ---- the lab's orders (DESIGN.md 2б, «Заказы»): samples come in to the counter, each with what to find out
+        /// Chalk helpers in the lab: they carry the orders to the apparatus and work them.
+        public int Crew => (int)PerkSum(PerkKind.Crew);
+        /// How many apparatus of a formula stand in its department.
+        public int Copies(string station) { int n = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Copies && d.station == station) n++; } return n; }
+        /// Orders on the counter at once.
+        public int CounterSlots => Math.Min(8, 4 + (int)PerkSum(PerkKind.Counter));
+        /// Seconds of the day between two orders coming in.
+        public float OrderEvery { get { float t = 9; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Flow) t /= (float)d.value; } return t; } }
+
+        /// One test of an order: the formula's value on the sample times `share` (how well it was done), in its coin.
+        /// Nothing is earned yet: the order pays when it goes back to the counter. The bookkeeping is Fire's.
+        public double Measure(FormulaDef f, Sample sample, double share, out Cur cur)
+        {
+            cur = f.kind == FKind.Energy ? f.yields : ChalkPhysics.Cur.Obs;
+            double v = YieldOf(f, cur, sample) * share;
+            LessonFires[f.id] = (LessonFires.TryGetValue(f.id, out var n) ? n : 0) + 1;
+            sample.uses++;
+            sample.seenAt.Add(f.station);
+            if (f.reveals == "m") sample.knowM = true;
+            if (f.kind == FKind.Energy && sample.golden && !sample.knowGold) { sample.knowGold = true; GoldFound?.Invoke(sample); }
+            return v;
+        }
+
+        // ---- the order sheets (DESIGN.md 2б, «Листки-заказы»): the dynamometer is read by eye, and it is not quite true
+        /// The value of the best of the perks bought from `ids` (the last one bought is the finest), or `none`.
+        double Best(string[] ids, double none) { double v = none; foreach (var id in ids) if (HasPerk(id)) v = Math.Min(v, Defs.Pk(id).value); return v; }
+        /// The dynamometer's scale: newtons a division.
+        public double ScaleStep => Best(new[] { "scale1", "scale2", "scale3" }, 1);
+        /// How far off the dynamometer may be, a share of the weight: a new reading every time a sample is hung.
+        public double SpringError => Best(new[] { "true1", "true2", "true3" }, 0.05);
+        /// The shelf's impact scale: joules a division; and how far off its block may be.
+        public double ImpactStep => Best(new[] { "iscale1", "iscale2" }, 0.5);
+        public double ImpactError => Best(new[] { "ihard1", "ihard2" }, 0.05);
+        /// The 3D lab's own numbers for the letters it uses (DESIGN.md 2б, «Второй прибор — полка»): the shelf is h = 0,5 m
+        /// high, so that the energy of its blow is not the weight over again, and h is opened for coins.
+        static bool _3d;
+        public static void Use3D()
+        {
+            Day3D = true;
+            if (_3d) return;
+            _3d = true;
+            Defs.Use3DTree();
+            var h = Defs.L("h");   // in the bath's V = Sh: how far the water rises
+            h.name = "подъём воды";
+            h.unit = "м";
+            h.fmt = "0.#";
+            h.openCur = ChalkPhysics.Cur.Coin;
+            h.openCost = 60;       // opened together with S: one purchase
+        }
+
+        /// The bath's scale: litres a division; and how far off it may be.
+        public double VolumeStep => Best(new[] { "vscale1", "vscale2" }, 0.5);
+        public double VolumeError => Best(new[] { "vtrue1", "vtrue2" }, 0.05);
+        /// The inclined plane's protractor: degrees a division; and how far off the board may be (a share of the friction).
+        public double AngleStep => Best(new[] { "astep1" }, 5);
+        public double SlipError => Best(new[] { "atrue1", "atrue2" }, 0.05);
+
+        /// Order sheets on the counter in the morning: no more come during the day.
+        public int OrdersPerDay { get { int n = 5; foreach (var id in new[] { "ord1", "ord2", "ord3" }) if (HasPerk(id)) n += (int)Defs.Pk(id).value; return n; } }
+        /// What an answer is worth: all of the reward when it is right, nothing when it is a quarter off or more.
+        public static double Accuracy(double answer, double truth, double tolerance = 0.25) => truth <= 0 ? 0 : Math.Max(0, 1 - Math.Abs(answer - truth) / truth / tolerance);
+
+        /// Places on the bench the player fills (the guest takes one more).
+        public int OwnSlots => 1 + (int)PerkSum(PerkKind.Slots);
+        /// Tasks given at once in a run.
+        public int TaskSlots => 1 + (int)PerkSum(PerkKind.TaskSlots);
+        /// Chalk helpers that may come to one run: none for now — they confused more than they helped (DESIGN.md 2а).
+        public int CrewSize => 0;
+        /// What a finished task adds to the run: an explicit, earned share of everything it brought.
+        public const double TaskBonus = 0.25;
+        /// What the guest instrument pays on top: nothing until it is bought.
+        public double GuestMult { get { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.GuestMult) m *= d.value; } return m; } }
+
+        // ---- the qualification: an explicit, earned multiplier on everything
+        public static readonly string[] RankNames = { "лаборант", "мл. научный сотрудник", "научный сотрудник", "кандидат наук", "доктор наук", "академик" };
+        public static readonly double[] RankMults = { 1, 1.25, 1.5, 2, 3, 5 };
+        /// Points (formulas assembled right) at which each rank begins.
+        public static readonly int[] RankFrom = { 0, 2, 5, 9, 14, 20 };
+        public int Rank { get { int r = 0; while (r + 1 < RankFrom.Length && RankPts >= RankFrom[r + 1]) r++; return r; } }
+        public double RankMult => RankMults[Rank];
+        public string RankName => RankNames[Rank];
+        /// Formulas still to assemble for the next rank (0 at the top).
+        public int RankToNext => Rank + 1 < RankFrom.Length ? RankFrom[Rank + 1] - RankPts : 0;
+        /// The exam comes to the bench once a few formulas are known: there is something to remember.
+        public bool QualificationOpen { get { int n = 0; foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0) n++; return n >= 3; } }
+        public void RankUp() { RankPts++; Save(); }
+        public void RankDown() { RankPts = RankFrom[Math.Max(0, Rank - 1)]; Save(); }
+        public void AddHelper() { Helpers++; Save(); }
+
+        /// The instruments the player has (one per station: the circuit and the steam engine count once).
+        public List<string> BuiltStations()
+        {
+            var list = new List<string>();
+            foreach (var f in Defs.Formulas) if (Built(f.id) && f.station.Length > 0 && !list.Contains(f.station)) list.Add(f.station);
+            return list;
+        }
         public double StationMult(string station) { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.StationMult && d.station == station) m *= d.value; } return m; }
         /// How long one swing takes on screen: the period T, sped up so that l = g = 1 swings in 2 s.
         public float SwingPeriod => Mathf.Max(0.3f, (float)V("T") / Mathf.PI);
-        /// Swings (one idea each) that one push of the pendulum gives: 3 at l = g = 1, growing as the square root of
-        /// g / l, so a shorter thread or a stronger g swings more. Fractions carry over to the next push.
-        public double PendSwings => 3 * 2 * Math.PI / Math.Max(1e-6, V("T")) + (HasPerk("swings") ? 2 : 0);
         public int SampleCount { get { int n = 3; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.Samples) n += (int)d.value; } return n; } }
         public double GoldChance => 0.06 + (HasPerk("gold1") ? 0.06 : 0) + (HasPerk("gold2") ? 0.08 : 0) + (HasPerk("gold3") ? 0.1 : 0);
         public double CurMult(Cur c) { double m = 1; foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.CurMult && d.cur == c) m *= d.value; } return m; }
@@ -191,29 +334,16 @@ namespace ChalkPhysics
         public double GoldMult => HasPerk("shine") ? 5 : 3;
         public int ShelfCapacity => 3;
         public int BallsPerDrop => Has("hopper3") ? 4 : Has("hopper2") ? 2 : 1;
-        /// The pendulum swings by itself from the day it is built; everything else needs its device.
-        public bool Automated(string station) { if (station == "pend") return true; var d = Defs.AutoDevice(station); return d != null && Has(d.id); }
-        /// Whether an instrument keeps its specimen after a run. The circuit holds its specimens in their sockets,
-        /// yet it never runs by itself: it cannot be automated at all.
-        public bool Keeps(string station) => station == "stand" || Automated(station);
 
         // ---------------- the steam era: the bench has a temperature ----------------
         /// How hot the bench is (0..1). Every heating raises it, it cools down by itself; the engine, the piston
         /// and the ice all work the harder the hotter it is. A run starts cold.
         public float Boiler;
         public float BoilerRise => HasPerk("stoke") ? 0.4f : 0.22f;     // per heating
-        public float BoilerCool => Has("lagging") ? 0.05f : 0.1f;       // per action
+        public float BoilerCool => Has("lagging") ? 0.04f : 0.08f;      // per second
         public double BoilerMult => 0.4 + 2.6 * Boiler;
         static bool Steam(string station) => station == "engine" || station == "piston" || station == "ice";
 
-        // ---------------- the launch console ("Пульт запуска") ----------------
-        /// With the console the instruments no longer fire when a specimen is put on them: the player arranges the
-        /// bench, then presses "Пуск" and everything runs at once. Specimens stay where they were put.
-        public bool LaunchMode => HasPerk("hands") || HasPerk("hands3");
-        public int PlaceBudget => HasPerk("hands2") || HasPerk("hands4") ? 3 : 2;
-        public int Places;               // rearrangements left before the next launch
-        /// A specimen hanging on the pendulum gets boring: each round on the thread gives fewer ideas.
-        public double PendFatigue(int rounds) => Math.Max(Has("clock") ? 0.45 : 0.3, Math.Pow(Has("clock") ? 0.93 : 0.85, rounds));
         public double ObsMult { get { double m = (Has("lens1") ? 1.5 : 1) * (Has("lens2") ? 1.5 : 1) * (Has("lens3") ? 1.5 : 1) * (Has("lens4") ? 1.5 : 1); foreach (var p in Perks) { var d = Defs.Pk(p); if (d != null && d.kind == PerkKind.ObsMult) m *= d.value; } return m; } }
 
         /// Levels of the letters in a measuring formula sharpen it: joules put into letters pay back in observations.
@@ -275,6 +405,7 @@ namespace ChalkPhysics
             // a specimen studied to the end is worth more with the census
             if (Census && sample != null && Measured(sample)) y *= 1.25;
             if (Steam(f.station)) y *= BoilerMult;
+            y *= RankMult;
             return y;
         }
 
@@ -329,24 +460,40 @@ namespace ChalkPhysics
         public void MarkUsed(string key) { if (Used.Add(key)) Save(); }
 
         // ---------------- lessons ----------------
-        public bool UseAction()
+        /// The bench of the next run: the player's own places hold what he picked last time (or the newest instruments),
+        /// and the guest is a random instrument from the rest — a new one first, so that it gets tried.
+        public void PickBench(System.Random rnd = null)
         {
-            if (Phase != Phase.Lesson || ActionsLeft <= 0) return false;
-            ActionsLeft--;
-            Boiler = Mathf.Max(0, Boiler - BoilerCool);      // the bench cools a little with every action
-            Changed?.Invoke();
-            return true;
+            rnd = rnd ?? (Sandbox && SandboxRng != null ? SandboxRng : new System.Random());
+            var all = BuiltStations();
+            Loadout.RemoveAll(x => !all.Contains(x));
+            for (int i = all.Count - 1; i >= 0 && Loadout.Count < Math.Min(OwnSlots, all.Count); i--)
+                if (!Loadout.Contains(all[i]) && !(all.Count > OwnSlots && IsNew(all[i]))) Loadout.Add(all[i]);
+            for (int i = all.Count - 1; i >= 0 && Loadout.Count < Math.Min(OwnSlots, all.Count); i--)
+                if (!Loadout.Contains(all[i])) Loadout.Add(all[i]);
+            while (Loadout.Count > OwnSlots) Loadout.RemoveAt(Loadout.Count - 1);
+            Bench.Clear(); Bench.AddRange(Loadout);
+            Guest = null;
+            var rest = all.Where(x => !Bench.Contains(x)).ToList();
+            if (rest.Count > 0)
+            {
+                var fresh = rest.Where(IsNew).ToList();
+                Guest = fresh.Count > 0 ? fresh[0] : rest[rnd.Next(rest.Count)];
+                Bench.Add(Guest);
+            }
         }
+        /// An instrument the player has never worked with yet: it comes as the guest, and the clock waits for it.
+        public bool IsNew(string station) => !Used.Contains(station);
 
         public void StartLesson()
         {
             if (Phase == Phase.Lesson || Won || !AnyStation) return;
             Phase = Phase.Lesson;
-            ActionsLeft = MaxActions;
-            Places = PlaceBudget;
+            if (Bench.Count == 0 || Bench.Any(x => !BuiltStations().Contains(x))) PickBench();
+            TimeLeft = LevelSeconds;
             Boiler = 0;
             GenerateSamples();
-            for (int i = 0; i < 4; i++) LessonEarned[i] = 0;
+            for (int i = 0; i < NCur; i++) LessonEarned[i] = 0;
             LessonFires.Clear();
             LessonStarted?.Invoke();
             Changed?.Invoke();
@@ -370,6 +517,21 @@ namespace ChalkPhysics
             while (k < HatchSteps.Length && d >= HatchSteps[k]) k++;
             return HatchScale[k];
         }
+        static readonly System.Random _rng = new System.Random();
+
+        /// One more specimen of this run, by the crate's rules (the 3D lab's crates at the tables and the parcel).
+        public Sample AddSample(bool weighed)
+        {
+            var rnd = Sandbox && SandboxRng != null ? SandboxRng : _rng;
+            double heavy = HasPerk("heavy") ? 1.25 : 1;
+            var s = new Sample { id = Samples.Count, massR = Ratios[rnd.Next(Ratios.Length)] * heavy, volR = Ratios[rnd.Next(Ratios.Length)], mu = Roughness[rnd.Next(Roughness.Length)] };
+            s.golden = rnd.NextDouble() < GoldChance;
+            s.pattern = HatchFor(s);
+            s.knowM = weighed || HasPerk("autoweigh");
+            Samples.Add(s);
+            return s;
+        }
+
         void GenerateSamples()
         {
             Samples.Clear();
@@ -396,6 +558,7 @@ namespace ChalkPhysics
             if (Phase != Phase.Lesson) return;
             Phase = Phase.Break;
             Lessons++;
+            Bench.Clear();
             LessonEnded?.Invoke();
             Changed?.Invoke();
             Save();
@@ -476,11 +639,11 @@ namespace ChalkPhysics
         }
 
         /// An early perk waits only for its formula; everything else waits for its whole branch.
-        public bool PerkOpen(PerkDef p) => ChainOpen(p.requires) || (p.early && !p.requires.StartsWith("L:") && Built(p.requires));
+        public bool PerkOpen(PerkDef p) => InPlay(p) && (ChainOpen(p.requires) || (p.early && !p.requires.StartsWith("L:") && Built(p.requires)));
 
         /// Nothing to upgrade yet: devices, perks and letter levels all wait for the very first joules (from the shelf),
         /// so a new player meets one thing at a time.
-        public bool UpgradesOpen => Total[(int)ChalkPhysics.Cur.J] > 0 || Revolutions > 0;
+        public bool UpgradesOpen => Day3D ? Lessons > 0 : Total[(int)ChalkPhysics.Cur.J] > 0 || Revolutions > 0;
 
         // ---------------- letters: opened for joules ----------------
         /// Letters that open together: the new letters of one layer of the tree. The theory there needs them all, so
@@ -632,7 +795,7 @@ namespace ChalkPhysics
         {
             if (!CanRevolt) return;
             var r = NextRevolution;
-            for (int i = 0; i < 4; i++) Cur[i] = 0;
+            for (int i = 0; i < NCur; i++) Cur[i] = 0;
             _lvl.Clear();
             Devices.Clear();
             Perks.Clear();
@@ -642,6 +805,7 @@ namespace ChalkPhysics
             Known.Clear();
             foreach (var x in keep) Known.Add(x);
             Proven.Clear(); BuiltAt.Clear(); Filled.Clear(); Wrong.Clear();
+            Loadout.Clear(); Bench.Clear();
             Revolutions = r.to;
             foreach (var l in r.freeLetters) AddKnown(l);
             RevolutionDone?.Invoke(Revolutions);
@@ -671,6 +835,7 @@ namespace ChalkPhysics
                     known = Known.ToList(), proven = Proven.ToList(), devices = Devices.ToList(), perks = Perks.ToList(), used = Used.ToList(), gates = Gates.ToList(),
                     builtIds = BuiltAt.Keys.ToList(), builtVals = BuiltAt.Values.ToList(),
                     lvlIds = _lvl.Keys.ToList(), lvlVals = _lvl.Values.ToList(),
+                    helpers = Helpers, rank = RankPts, loadout = Loadout.ToList(), career = Career,
                 };
                 foreach (var kv in Filled) foreach (var l in kv.Value) d.filled.Add(kv.Key + ":" + l);
                 WriteSave(JsonUtility.ToJson(d));
@@ -685,8 +850,8 @@ namespace ChalkPhysics
                 string json = ReadSave();
                 if (string.IsNullOrEmpty(json)) return false;
                 var d = JsonUtility.FromJson<SaveData>(json);
-                if (d == null || d.cur == null || d.cur.Length != 4) return false;
-                for (int i = 0; i < 4; i++) { Cur[i] = d.cur[i]; Total[i] = d.total[i]; }
+                if (d == null || d.cur == null || d.cur.Length < 4 || d.total == null || d.total.Length < d.cur.Length) return false;
+                for (int i = 0; i < d.cur.Length && i < NCur; i++) { Cur[i] = d.cur[i]; Total[i] = d.total[i]; }   // an older save has no coins
                 PlayTime = d.time; Revolutions = d.revolutions; Lessons = d.lessons;
                 Won = d.won; Sfx.Muted = d.muted;
                 foreach (var x in d.known) if (Defs.HasLetter(x)) Known.Add(x);
@@ -698,6 +863,9 @@ namespace ChalkPhysics
                 foreach (var x in d.gates) Gates.Add(x);
                 for (int i = 0; i < d.builtIds.Count; i++) BuiltAt[d.builtIds[i]] = d.builtVals[i];
                 for (int i = 0; i < d.lvlIds.Count; i++) _lvl[d.lvlIds[i]] = d.lvlVals[i];
+                Helpers = d.helpers; RankPts = d.rank;
+                if (d.career != null) Career = d.career;
+                if (d.loadout != null) Loadout.AddRange(d.loadout);
                 foreach (var x in d.filled)
                 {
                     int i = x.IndexOf(':');
@@ -737,8 +905,12 @@ namespace ChalkPhysics
         public static string FmtCur(double v, Cur c) { var n = Defs.CurName[(int)c]; return n.Length > 0 ? Fmt(v) + " " + n : Fmt(v); }
         /// The mark a chalk lightbulb is drawn over (see InkText): ideas are written the same way everywhere.
         public const string Bulb = "¤";
+        /// The mark a chalk coin is drawn over (see InkText).
+        public const string Coin = "¢";
+        /// A star of a regular customer's trust: drawn in chalk by InkText, like the coin.
+        public const string Star = "§";
         /// A price or a yield in any currency; ideas get their lightbulb after the number.
-        public static string FmtPrice(double v, Cur c) => c == ChalkPhysics.Cur.Obs ? Fmt(v) + " " + Bulb : FmtCur(v, c);
+        public static string FmtPrice(double v, Cur c) => c == ChalkPhysics.Cur.Obs ? Fmt(v) + " " + Bulb : c == ChalkPhysics.Cur.Coin ? Fmt(v) + " " + Coin : FmtCur(v, c);
         public string LetterValue(string id) => FmtValue(id, V(id));
 
         public static string FmtValue(string id, double v)

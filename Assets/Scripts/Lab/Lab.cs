@@ -23,10 +23,12 @@ namespace ChalkPhysics
         readonly HashSet<string> _seen = new HashSet<string>();
         bool _everBuilt;
         int _newIndex;
-        readonly Text[] _cur = new Text[4];
+        readonly Text[] _cur = new Text[GameState.NCur];
         Text _hint, _startText, _alchText, _tipTitle, _tipBody, _tipStat;
+        readonly InkText[] _goalLines = new InkText[7];
         InkText _tipInk;
         RectTransform _startBtn, _alchBtn, _tip, _hintBack, _startBack, _alchBack, _top, _topBack;
+        Text _crewText, _rankText;               // the crew of chalk helpers and the qualification, after the counters
         ChalkShape _topBox;
         float _topRight;
         ChalkShape _edges, _startBox, _alchBox, _tipBox, _curIcons;
@@ -35,8 +37,8 @@ namespace ChalkPhysics
         float _hintT, _startShake, _alchShake, _tipW, _tipH, _minX, _maxX, _minY, _maxY;
         float _zoom = 1, _zoomT = 1;                          // the map's own zoom (mouse wheel)
         bool _userZoomed;                                     // once the player has used the wheel, the zoom is theirs
-        readonly double[] _shownCur = new double[4], _curTarget = new double[4];   // counters tick up to their value
-        readonly float[] _curFlash = new float[4];
+        readonly double[] _shownCur = new double[GameState.NCur], _curTarget = new double[GameState.NCur];   // counters tick up to their value
+        readonly float[] _curFlash = new float[GameState.NCur];
         bool _panning, _tipOn;
 
         GameState G => GameState.I;
@@ -68,12 +70,19 @@ namespace ChalkPhysics
             UIF.Text(_top, "Лаборатория", 46, ChalkTex.White, new Vector2(-700, 500), new Vector2(460, 60), TextAnchor.MiddleLeft);
             var ul = UIF.Shape(_top, 12);
             ul.Line(new Vector2(-930, 470), new Vector2(-630, 472), ChalkTex.White, 3f);
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < GameState.NCur; i++)
                 _cur[i] = UIF.Text(_top, "", 34, Apparatus.CurColor(i), Vector2.zero, new Vector2(250, 60));
             _curIcons = UIF.Shape(_top, 13, "CurIcons");
+            _crewText = UIF.Text(_top, "", 30, ChalkTex.White, Vector2.zero, new Vector2(120, 50), TextAnchor.MiddleLeft);
+            _rankText = UIF.Text(_top, "", 26, ChalkTex.Yellow, Vector2.zero, new Vector2(420, 50), TextAnchor.MiddleLeft);
 
             _hint = UIF.Text(Content, "", 28, ChalkTex.Cyan, new Vector2(0, -500), new Vector2(980, 56));
 
+            for (int i = 0; i < _goalLines.Length; i++)
+            {   // the goals between the days (Career): yesterday's news, then where each goal stands; over the start button
+                var gt = UIF.Text(Content, "", 28, ChalkTex.White, new Vector2(420, -380 + i * 36), new Vector2(1000, 40), TextAnchor.MiddleRight);
+                _goalLines[i] = InkText.On(gt);
+            }
             _startBtn = UIF.Rect("Start", Content, new Vector2(720, -460), new Vector2(400, 84));
             UIF.Catcher(_startBtn);
             // the backing sits just inside the chalk frame (as under the tooltip) and grows with the button on hover
@@ -254,7 +263,7 @@ namespace ChalkPhysics
                     }
                     BuildNode(sl.code, sl.pos, i, shown);
                     Bounds(sl.pos);
-                    if (Defs.Kind(sl.code) == 'F') BuildChain(Defs.Id(sl.code), sl.pos, r, sl.n, 5);
+                    if (Defs.Kind(sl.code) == 'F') BuildChain(Defs.Id(sl.code), sl.pos, r, sl.n, 7);
                     else if (Defs.Kind(sl.code) == 'L') BuildChain("L:" + Defs.Id(sl.code), sl.pos, r, sl.n, 5);
                     if (sl.inward != null)
                     {   // the second letter of a pair: on the inner side, sprouting from the previous node like its sibling
@@ -385,7 +394,7 @@ namespace ChalkPhysics
         {
             var list = new List<ChainItem>();
             foreach (var d in Defs.Devices) if (d.requires == key && d.domain <= G.Era) list.Add(new ChainItem { device = d, price = InIdeas(d.price, d.cost) });
-            foreach (var p in Defs.Perks) if (p.requires == key && p.domain <= G.Era) list.Add(new ChainItem { perk = p, price = InIdeas(p.price, p.cost), coin = p.Teaser ? 1 : 0 });
+            foreach (var p in Defs.Perks) if (p.requires == key && p.domain <= G.Era && GameState.InPlay(p)) list.Add(new ChainItem { perk = p, price = InIdeas(p.price, p.cost), coin = p.Teaser ? 1 : 0 });
             // what is paid in ideas grows first; a teaser priced in the next era's coin always closes the branch
             list.Sort((a, b) => a.coin != b.coin ? a.coin.CompareTo(b.coin) : a.price.CompareTo(b.price));
             return list;
@@ -485,10 +494,41 @@ namespace ChalkPhysics
                 case "lens": s.Circle(P(-4, 4), 11, c, 2.5f); s.Line(P(4, -4), P(16, -16), c, 3.5f); break;
                 case "star": { var pts = new List<Vector2>(); for (int i = 0; i < 11; i++) { float a = Mathf.PI / 2 + i / 10f * Mathf.PI * 2; float r = i % 2 == 0 ? 17 : 8; pts.Add(P(Mathf.Cos(a) * r, Mathf.Sin(a) * r)); } s.Poly(pts, c, 2.5f, false, false); } break;
                 case "box": s.Rect(P(0, -2), P(28, 22), c, 2.5f); s.Line(P(-14, 6), P(14, 6), c, 2f); s.Line(P(0, 6), P(0, -13), c, 1.5f); break;
+                case "tray": s.Line(P(-18, -8), P(18, -8), c, 2.6f); s.Line(P(-18, -8), P(-21, -3), c, 2f); s.Line(P(18, -8), P(21, -3), c, 2f); s.Rect(P(-7, 1), P(11, 11), c, 2.2f); s.Rect(P(7, 2), P(9, 9), c, 2.2f); break;
+                case "parcel": s.Rect(P(0, -3), P(28, 20), c, 2.5f); s.Line(P(0, 7), P(0, -13), faint, 2f); s.Line(P(-14, -3), P(14, -3), faint, 2f); s.Line(P(0, 7), P(-6, 13), c, 2f); s.Line(P(0, 7), P(6, 13), c, 2f); break;
                 case "eye": s.Arc(P(0, -4), 18, 0.5f, Mathf.PI - 0.5f, c, 2.5f); s.Arc(P(0, 12), 18, Mathf.PI + 0.5f, Mathf.PI * 2 - 0.5f, c, 2.5f); s.Circle(P(0, 4), 6, c, 2.5f); break;
                 case "clock": s.Circle(P(0, 0), 16, c, 2.5f); s.Line(P(0, 0), P(0, 10), c, 2.5f); s.Line(P(0, 0), P(7, -4), c, 2.5f); break;
                 case "rev": s.Arc(P(0, 0), 16, 0.3f, Mathf.PI * 1.7f, c, 3f); s.Arrow(P(15, 2), P(10, -8), c, 2.5f, 8f); break;
                 case "act": for (int i = 0; i < 4; i++) s.Line(P(-12 + i * 7, -12), P(-12 + i * 7, 12), c, 2.5f); s.Line(P(-16, -8), P(14, 10), c, 2.5f); break;
+                case "table": s.Line(P(-20, -2), P(20, -2), c, 3f); s.Line(P(-16, -2), P(-16, -18), c, 2.5f); s.Line(P(16, -2), P(16, -18), c, 2.5f); s.Rect(P(-6, 8), P(14, 14), c, 2.2f); s.Rect(P(9, 6), P(10, 10), faint, 2f); break;
+                case "chalkie": Apparatus.Chalkie(s, P(0, -2), 0.85f * k, c, 0f, 0f); break;
+                case "coin": s.Circle(P(0, 2), 10, c, 2.4f); s.Circle(P(0, 2), 5.5f, faint, 1.8f); s.Line(P(0, -1), P(0, 5), c, 2f); break;
+                case "sign": s.Rect(P(0, 6), P(30, 16), c, 2.5f); s.Line(P(-8, 6), P(8, 6), faint, 2f); s.Line(P(-10, -2), P(-10, -18), c, 2.5f); s.Line(P(10, -2), P(10, -18), c, 2.5f); break;
+                case "guest": s.Line(P(-20, -6), P(20, -6), c, 3f); s.Line(P(-16, -6), P(-16, -18), c, 2.5f); s.Line(P(16, -6), P(16, -18), c, 2.5f); s.Arc(P(0, 11), 6, -0.4f, Mathf.PI + 0.6f, c, 2.4f); s.Line(P(0, 5), P(0, 1), c, 2.4f); s.Line(P(0, -1), P(0, -3), c, 2.6f); break;
+                case "trust":
+                    {   // a regular customer's star of trust: five points
+                        var pts = new List<Vector2>();
+                        for (int i = 0; i < 10; i++) { float a = Mathf.PI / 2 + i * Mathf.PI / 5; float r = i % 2 == 0 ? 11 : 4.6f; pts.Add(P(Mathf.Cos(a) * r, Mathf.Sin(a) * r)); }
+                        s.Poly(pts, c, Mathf.Lerp(1.8f, 2.6f, Mathf.Clamp01(k)), true, false);
+                        break;
+                    }
+                // the odd departments of the 3D lab (DESIGN.md 2б, «Крейзи-измерения»)
+                case "mortar":   // a mortarboard: the square top, the cap under it, the tassel
+                    s.Poly(new[] { P(-22, 6), P(0, 15), P(22, 6), P(0, -3) }, c, 2.6f, true);
+                    s.Line(P(-12, 2), P(-12, -9), c, 2.4f);
+                    s.Line(P(12, 2), P(12, -9), c, 2.4f);
+                    s.Arc(P(0, -9), 12, Mathf.PI, Mathf.PI * 2, c, 2.4f);
+                    s.Line(P(0, 6), P(16, 3), faint, 2f);
+                    s.Line(P(16, 3), P(16, -10), faint, 2f);
+                    s.Circle(P(16, -12), 2.2f, c, 2f);
+                    break;
+                case "tongue": s.Arc(P(0, 2), 12, Mathf.PI, Mathf.PI * 2, c, 2.6f); s.Line(P(-12, 2), P(-12, 14), c, 2.6f); s.Line(P(12, 2), P(12, 14), c, 2.6f); s.Line(P(0, 12), P(0, -4), faint, 2f); s.Line(P(-16, 14), P(16, 14), c, 2.6f); break;
+                case "fishing": s.Arc(P(-2, 0), 10, 0.5f, Mathf.PI * 2 - 0.5f, c, 2.6f); s.Line(P(8, 5), P(18, -6), c, 2.4f); s.Line(P(8, -5), P(18, 6), c, 2.4f); s.Circle(P(-6, 2), 1.6f, c, 2f); s.Line(P(-2, 10), P(-2, 20), faint, 2f); break;
+                case "switch": s.Rect(P(0, 0), P(22, 32), c, 2.5f); s.Rect(P(0, 4), P(8, 12), c, 2.4f); s.Circle(P(0, -10), 2, faint, 2f); break;
+                case "mirror": s.Arc(P(0, 2), 12, 0, Mathf.PI * 2, c, 2.6f); s.Line(P(-5, 8), P(3, 14), faint, 2f); s.Line(P(-8, 2), P(4, 11), faint, 2f); s.Line(P(0, -10), P(0, -18), c, 2.5f); s.Line(P(-8, -18), P(8, -18), c, 2.5f); break;
+                case "cat": s.Arc(P(0, -2), 12, 0, Mathf.PI * 2, c, 2.6f); s.Line(P(-11, 4), P(-9, 16), c, 2.4f); s.Line(P(-9, 16), P(-3, 9), c, 2.4f); s.Line(P(11, 4), P(9, 16), c, 2.4f); s.Line(P(9, 16), P(3, 9), c, 2.4f); s.Line(P(-16, -4), P(-6, -3), faint, 1.8f); s.Line(P(16, -4), P(6, -3), faint, 1.8f); break;
+                case "note": s.Circle(P(-5, -12), 5, c, 2.6f); s.Line(P(0, -12), P(0, 14), c, 2.6f); s.Line(P(0, 14), P(10, 6), c, 2.4f); break;
+                case "feather": s.Line(P(-14, -16), P(14, 16), c, 2.4f); for (int i = 0; i < 5; i++) { var b = P(-8 + i * 5, -9 + i * 5.8f); s.Line(b, b + new Vector2(-7, 4) * k, faint, 2f); s.Line(b, b + new Vector2(4, -7) * k, faint, 2f); } break;
                 default: s.Circle(P(0, 0), 14, c, 2.5f); break;
             }
         }
@@ -498,9 +538,15 @@ namespace ChalkPhysics
         static string DeviceIcon(DeviceDef d) => d.icon ?? (d.automates != null ? Defs.StationIcon(d.automates) : "gear");
         static string PerkIcon(PerkDef p) => p.icon ?? (p.kind switch
         {
-            PerkKind.Actions => "act",
+            PerkKind.Seconds => "clock",
             PerkKind.Samples => "box",
-            PerkKind.AutoMult => "gear",
+            PerkKind.Slots => "table",
+            PerkKind.TaskSlots => "list",
+            PerkKind.Crew => "chalkie",
+            PerkKind.Copies => Defs.StationIcon(p.station),
+            PerkKind.Counter => "box",
+            PerkKind.Flow => "sign",
+            PerkKind.GuestMult => "guest",
             PerkKind.ObsMult => "bulb",
             PerkKind.StationMult => Defs.StationIcon(p.station),
             _ => "star",
@@ -537,7 +583,7 @@ namespace ChalkPhysics
                 if (ff.kind != FKind.Final)
                 {
                     var yc = ff.kind == FKind.Energy ? ff.yields : Cur.Obs;
-                    stat = "За действие: " + GameState.FmtPrice(G.YieldOf(ff, yc), yc) + (G.Automated(ff.station) ? "  · работает сама" : "");
+                    stat = "За опыт: " + GameState.FmtPrice(G.YieldOf(ff, yc), yc);
                     sc2 = Apparatus.CurColor((int)yc);
                 }
                 ShowTip(ff.title, body, stat, sc2);
@@ -658,7 +704,9 @@ namespace ChalkPhysics
             DrawIcon(ic, PerkIcon(p), pcol, 0.8f);
             // a perk that multiplies one instrument shows that instrument with its multiplier
             if (p.kind == PerkKind.StationMult) UIF.Text(rt, "×" + (int)p.value, 19, pcol, new Vector2(28, -2), new Vector2(40, 24));
-            if (p.kind == PerkKind.Actions) UIF.Text(rt, "+" + (int)p.value, 17, pcol, new Vector2(27, -1), new Vector2(40, 22));
+            if (p.kind is PerkKind.Copies or PerkKind.Counter or PerkKind.Crew) UIF.Text(rt, "+" + (int)p.value, 17, pcol, new Vector2(27, -1), new Vector2(50, 22));
+            if (p.kind == PerkKind.Seconds) UIF.Text(rt, GameState.Day3D ? "+" + GameState.HoursOf(p) + "ч" : "+" + (int)p.value + "с", 17, pcol, new Vector2(27, -1), new Vector2(50, 22));
+            if (p.kind == PerkKind.GuestMult) UIF.Text(rt, "×" + p.value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture), 17, pcol, new Vector2(27, -1), new Vector2(50, 22));
             var pc = Apparatus.CurColor((int)p.cost);
             var price = UIF.Text(rt, "", 17, have ? ChalkTex.Green : pc, new Vector2(0, -26), new Vector2(SMALL - 8, 22));
             InkText.On(price).Set(have ? "✓" : GameState.FmtPrice(p.price, p.cost), pc);
@@ -667,7 +715,7 @@ namespace ChalkPhysics
             c.onClick = () =>
             {
                 if (G.HasPerk(p.id)) return;
-                if (G.BuyPerk(p.id)) { Sfx.Play("correct", 0.7f); FX.I.Dust(Content, BoardToFixed(pos), ChalkTex.Pink, 16, 240f); FX.I.Text(Content, BoardToFixed(pos) + new Vector2(0, 70), p.desc, ChalkTex.Pink, 24, 1.6f); HideTip(); }
+                if (G.BuyPerk(p.id)) { Sfx.Play("correct", 0.7f); FX.I.Dust(Content, BoardToFixed(pos), ChalkTex.Pink, 16, 240f); FX.I.Text(Content, BoardToFixed(pos) + new Vector2(0, 70), GameState.PerkDesc(p), ChalkTex.Pink, 24, 1.6f); HideTip(); }
                 else
                 {
                     Sfx.Play("nope", 0.5f);
@@ -680,10 +728,10 @@ namespace ChalkPhysics
                 rt.localScale = Vector3.one * (h && !G.HasPerk(p.id) ? 1.06f : 1f);
                 if (!h) { HideTip(); return; }
                 bool got = G.HasPerk(p.id);
-                string body = p.desc;
+                string body = GameState.PerkDesc(p);
                 if (!got && p.Teaser && G.Revolutions < (p.cost == Cur.C ? 1 : 2))
                     body += p.cost == Cur.C ? "\n<color=#BF99FF>Платится кулонами — их принесёт электричество</color>" : "\n<color=#FF8C66>Платится килокалориями — их принесёт паровая эпоха</color>";
-                ShowTip("★ " + p.title, body, got ? "взято" : "Цена: " + GameState.FmtPrice(p.price, p.cost), got ? ChalkTex.Green : pc);
+                ShowTip("★ " + GameState.PerkTitle(p), body, got ? "взято" : "Цена: " + GameState.FmtPrice(p.price, p.cost), got ? ChalkTex.Green : pc);
             };
         }
 
@@ -820,6 +868,7 @@ namespace ChalkPhysics
                                         : $"Измерена в прошлой эпохе опытом «{f.title}» и записана в тетрадь");
             }
             else if (d.perSample) sb.Append("У каждого образца своя, от гладкого до шершавого. Узнаётся на столе трения.");
+            else if (GameState.Day3D) sb.Append(G.LetterValue(id));
             else if (!G.UpgradesOpen) sb.Append($"{G.LetterValue(id)}\nУровни величин откроются, когда появятся первые джоули");
             else if (G.AtLimit(id)) sb.Append($"{G.LetterValue(id)} — предел прибора");
             else
@@ -893,14 +942,16 @@ namespace ChalkPhysics
             int shown = 0;
             float right = -600;
             _curIcons.Clear();
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < GameState.NCur; i++)
             {
-                bool show = i < 2 || (i == 2 && G.Era >= 1) || (i == 3 && G.Era >= 2);
+                // the 3D lab's orders pay coins: the other coins show once there are any
+                bool show = GameState.Day3D ? i == (int)Cur.Coin || G.Total[i] > 0
+                    : i < 2 || (i == 2 && G.Era >= 1) || (i == 3 && G.Era >= 2);
                 _cur[i].gameObject.SetActive(show);
                 if (!show) continue;
                 // ideas carry no name: a chalk lightbulb follows the number, and the pair is centred as one block
                 float cx = -370 + shown * 250;
-                bool bulb = i == (int)Cur.Obs;
+                bool bulb = i == (int)Cur.Obs || i == (int)Cur.Coin;
                 float shift = bulb ? -23f : 0f;
                 _cur[i].rectTransform.anchoredPosition = new Vector2(cx + shift, 500);
                 // the counter ticks up to its value and gives a little jump when it grows
@@ -913,9 +964,28 @@ namespace ChalkPhysics
                 _cur[i].transform.localScale = Vector3.one * (1 + 0.18f * _curFlash[i]);
                 _cur[i].text = GameState.FmtCur(_shownCur[i], (Cur)i);
                 // the bulb goes after this frame's number, as wide as it is drawn right now (it jumps when it grows)
-                if (bulb) DrawIcon(_curIcons, "bulb", ChalkTex.Cyan, 0.95f, new Vector2(cx + shift + _cur[i].preferredWidth * _cur[i].transform.localScale.x / 2 + 28, 501));
+                if (bulb) DrawIcon(_curIcons, i == (int)Cur.Coin ? "coin" : "bulb", Apparatus.CurColor(i), 0.95f, new Vector2(cx + shift + _cur[i].preferredWidth * _cur[i].transform.localScale.x / 2 + 28, 501));
                 right = Mathf.Max(right, cx + shift + _cur[i].preferredWidth / 2 + (bulb ? 50 : 0));
                 shown++;
+            }
+            // the people of the lab: the chalk helpers (a little figure and how many) and the rank, an explicit multiplier
+            float px = right + 50;
+            _crewText.gameObject.SetActive(false);
+            if (false)
+            {
+                Apparatus.Chalkie(_curIcons, new Vector2(px, 500), 1.15f, ChalkTex.White, 0.2f, 0.7f);
+                _crewText.text = "×" + G.Helpers;
+                _crewText.rectTransform.anchoredPosition = new Vector2(px + 20 + 60, 500);
+                right = px + 20 + _crewText.preferredWidth;
+                px = right + 44;
+            }
+            bool rank = G.QualificationOpen || G.RankPts > 0;
+            _rankText.gameObject.SetActive(rank);
+            if (rank)
+            {
+                _rankText.text = $"{G.RankName} ×{G.RankMult:0.##}";
+                _rankText.rectTransform.anchoredPosition = new Vector2(px + 210, 500);
+                right = px + _rankText.preferredWidth;
             }
             LayoutTop(Mathf.Ceil((right + 36) / 40f) * 40f);
 
@@ -930,7 +1000,17 @@ namespace ChalkPhysics
                 float p = 0.5f + 0.5f * Mathf.Sin(Time.time * 4);
                 _startBox.Clear();
                 _startBox.Rect(Vector2.zero, new Vector2(392 + p * 8, 76 + p * 4), ChalkTex.Yellow, 4f);
-                _startText.text = $"▶ Эксперимент {G.Lessons + 1}  ({G.MaxActions} действий)";
+                _startText.text = GameRoot.StartLabel(G);
+            }
+            {   // the goals' board: the newest at the bottom, just over the button
+                var lines = GameState.Day3D ? Career.MapLines(G) : new List<(string, bool)>();
+                for (int i = 0; i < _goalLines.Length; i++)
+                {
+                    int j = lines.Count - 1 - i;
+                    var (text, fresh) = j >= 0 ? lines[j] : ("", false);
+                    _goalLines[i].Set(text, fresh ? ChalkTex.Yellow : ChalkTex.White);
+                    _goalLines[i].Label.color = fresh ? ChalkTex.Yellow : new Color(1, 1, 1, 0.75f);
+                }
             }
 
             _alchShake = Mathf.Max(0, _alchShake - Time.deltaTime * 3);

@@ -13,8 +13,12 @@ namespace ChalkPhysics.EditorTools
     /// Unity.exe -batchmode -quit -projectPath <project> -executeMethod ChalkPhysics.EditorTools.BalanceSim.Batch -simOut <file> [-simSeeds 5]
     public static class BalanceSim
     {
-        // how long things take for an engaged player (the bot's pace, plus the curtains and the results card)
-        const float ActionSec = 1.5f, LessonOverhead = 6f, BreakSec = 8f, SlotSec = 2.5f;
+        // how long things take for an engaged player: a hand that moves a specimen or works an instrument (DESIGN.md 2а),
+        // the curtains and the results card around every run, the map and the theories between runs
+        const float LessonOverhead = 6f, BreakSec = 8f, SlotSec = 2.5f;
+        const float DropSec = 0.6f, TapSec = 0.3f, ShelfSec = 0.7f, PullSec = 0.6f, PushSec = 0.6f;   // a drop and a sweep of the doors; a pull of the spring or the pendulum
+        const float RunSec = 1.3f, SettleSec = 0.7f, HelperWait = 1.0f;
+        const double BotQ = 0.95, HelperQ = 0.5, TaskOdds = 0.55;
         const float TimeLimit = 8 * 3600f;
 
         [MenuItem("Tools/Balance sim")]
@@ -42,7 +46,7 @@ namespace ChalkPhysics.EditorTools
             var runs = new List<Run>();
             for (int i = 0; i < seeds; i++) runs.Add(new Run(1000 + i).Play());
             var sb = new StringBuilder();
-            sb.AppendLine($"Balance sim, {seeds} runs. Pace: {ActionSec} s per action, {BreakSec} s on the map, {SlotSec} s per letter in a theory.");
+            sb.AppendLine($"Balance sim, {seeds} runs. Live runs (15 s and up), {BreakSec} s on the map, {SlotSec} s per letter in a theory.");
             sb.AppendLine("Minutes to each milestone (median, min..max over runs); 'lesson' = experiments done before it.");
             sb.AppendLine();
             var keys = runs[0].Order.ToList();
@@ -75,11 +79,8 @@ namespace ChalkPhysics.EditorTools
             readonly System.Random _rng;
             GameState G;
             float _t;
-            int _rr;
-            readonly Dictionary<string, Sample> _res = new Dictionary<string, Sample>();   // automated stations' specimens
+            readonly Dictionary<string, Sample> _res = new Dictionary<string, Sample>();   // the specimen on each instrument
             Sample[] _sockets = new Sample[3];
-            int _pendHang;
-            double _pendAcc;
             public readonly Dictionary<string, (float min, int lesson)> At = new Dictionary<string, (float, int)>();
             public readonly List<string> Order = new List<string>();
             public readonly List<string> Lessons = new List<string>();
@@ -205,28 +206,109 @@ namespace ChalkPhysics.EditorTools
             bool NeedsSample(string st) => st != "stand" && st != "engine" && st != "piston" && MainFormula(G, st).sample;
             bool Free(Sample s) => !_res.ContainsValue(s) && !_sockets.Contains(s);
 
+            /// One live run: the bench is loaded, then a single hand works the instruments that have settled, the one waiting
+            /// longest first; the pendulum gets a push now and then; the helpers work theirs, slowly and half well.
             void Lesson()
             {
+                ChooseBench();
+                G.PickBench(_rng);
                 G.StartLesson();
-                _t += LessonOverhead;
-                _res.Clear(); _sockets = new Sample[3]; _pendHang = 0; _pendAcc = 0;
+                _res.Clear(); _sockets = new Sample[3];
                 var before = (double[])G.Total.Clone();
                 _by.Clear(); _earned.Clear();
-                // the circuit's sockets are filled for free
-                if (G.Built("ohm"))
-                    for (int i = 0; i < Defs.StandSlots(G); i++)
-                        _sockets[i] = G.BestSampleFor(Defs.F("ohm"), Free);
-                while (G.ActionsLeft > 0 && G.Phase == Phase.Lesson)
+                float T = G.LevelSeconds;
+                var bench = G.Bench.ToList();
+                var ready = new Dictionary<string, float>();
+                float hand = 0;
+                // the helpers take the instruments the hand would reach last: the guest, then the oldest
+                var crew = new HashSet<string>();
+                for (int i = 0; i < G.CrewSize && i < bench.Count - 1; i++) crew.Add(bench[bench.Count - 1 - i]);
+                foreach (var st in bench)
                 {
-                    if (!Act()) break;
-                    _t += ActionSec;
+                    if (st == "stand")
+                    {
+                        for (int i = 0; i < Defs.StandSlots(G); i++) { _sockets[i] = G.BestSampleFor(Defs.F("ohm"), Free); hand += DropSec; }
+                    }
+                    else if (NeedsSample(st))
+                    {
+                        var smp = G.BestSampleFor(MainFormula(G, st), Free);
+                        if (smp == null) continue;
+                        _res[st] = smp; hand += DropSec;
+                    }
+                    ready[st] = hand + SettleSec;
                 }
+                var helperNext = new Dictionary<string, float>();
+                foreach (var st in crew) if (ready.ContainsKey(st)) helperNext[st] = ready[st] + HelperWait - SettleSec;
+                bool pend = ready.ContainsKey("pend");
+                float pendUntil = -1, nextPush = pend ? ready["pend"] - SettleSec : 1e9f, nextSwing = 1e9f, period = G.SwingPeriod;
+                double pendQ = 0.85;
+                if (pend && crew.Contains("pend")) { pendUntil = T; nextSwing = ready["pend"] + period; pendQ = 0.6; nextPush = 1e9f; }
+                float last = 0;
+                void AdvanceTo(float to)
+                {
+                    to = Mathf.Min(to, T);
+                    G.Boiler = Mathf.Max(0, G.Boiler - G.BoilerCool * (to - last));
+                    last = to;
+                    if (pend) for (; nextSwing <= to; nextSwing += period) if (nextSwing <= pendUntil) Fire("pend", _res["pend"], pendQ);
+                    foreach (var st in crew)
+                    {
+                        if (st == "pend" || !helperNext.ContainsKey(st)) continue;
+                        while (helperNext[st] <= to)
+                        {
+                            float busy = Work(st, HelperQ);
+                            helperNext[st] += busy + HelperWait;
+                        }
+                    }
+                }
+                while (hand < T)
+                {
+                    AdvanceTo(hand);
+                    if (pend && hand >= nextPush)
+                    {   // a push keeps it swinging for a few more periods
+                        if (nextSwing > 1e8f) nextSwing = hand + period;
+                        pendUntil = hand + 4.5f; nextPush = hand + 4f; hand += PushSec;
+                        continue;
+                    }
+                    string pick = null; float oldest = float.MaxValue;
+                    foreach (var st in bench)
+                    {
+                        if (st == "pend" || crew.Contains(st) || !ready.ContainsKey(st)) continue;
+                        if (ready[st] <= hand && ready[st] < oldest) { oldest = ready[st]; pick = st; }
+                    }
+                    if (pick == null)
+                    {   // nothing has settled: the hand waits for the next one (or the next push)
+                        float next = nextPush;
+                        foreach (var st in bench) if (st != "pend" && !crew.Contains(st) && ready.ContainsKey(st)) next = Mathf.Min(next, ready[st]);
+                        hand = next > hand && next < 1e8f ? next : hand + 0.1f;
+                        continue;
+                    }
+                    float cost = pick == "fall" ? ShelfSec : pick == "spring" ? PullSec * 2 : pick == "dyna" ? PullSec : TapSec;
+                    double q = pick == "fall" ? 0.925 : pick == "spring" ? 0.925 : pick == "dyna" ? 0.9 : BotQ;
+                    hand += cost;
+                    float b2 = Work(pick, q);
+                    ready[pick] = hand + b2 + SettleSec;
+                    // a measured specimen gives half the ideas: swap an unknown one in when there is one
+                    var mf = MainFormula(G, pick);
+                    if (mf.reveals != null && _res.TryGetValue(pick, out var was) && was.Knows(mf.reveals))
+                    {
+                        var fresh = G.Samples.FirstOrDefault(x => !x.Knows(mf.reveals) && Free(x));
+                        if (fresh != null) { _res[pick] = fresh; hand += DropSec; ready[pick] += DropSec; }
+                    }
+                }
+                AdvanceTo(T);
+                // the tasks and the exam, as odds: a fair player finishes about half the tasks and rarely errs
+                int tasks = 0;
+                for (int k = 0; k < G.TaskSlots; k++) if (_rng.NextDouble() < TaskOdds) tasks++;
+                if (tasks > 0) { var got = new double[4]; for (int i = 0; i < 4; i++) got[i] = G.Total[i] - before[i]; for (int i = 0; i < 4; i++) G.Earn((Cur)i, got[i] * tasks * GameState.TaskBonus); }
+                if (G.QualificationOpen) { if (_rng.NextDouble() < (G.Rank < 3 ? 0.85 : 0.7)) G.RankUp(); else G.RankDown(); }
+                _t += LessonOverhead + T;
+                Shares();
                 G.EndLesson();
                 var run = new double[4];
                 for (int i = 0; i < 4; i++) run[i] = G.Total[i] - before[i];
                 if (Run0)
                 {
-                    Lessons.Add($"#{G.Lessons,-4} {_t / 60f,6:0.0} min  +{GameState.Fmt(run[0])} J  +{GameState.Fmt(run[1])} ideas  +{GameState.Fmt(run[2])} C  +{GameState.Fmt(run[3])} kcal   | {Stations().Count} instruments, {G.MaxActions} actions");
+                    Lessons.Add($"#{G.Lessons,-4} {_t / 60f,6:0.0} min  +{GameState.Fmt(run[0])} J  +{GameState.Fmt(run[1])} ideas  +{GameState.Fmt(run[2])} C  +{GameState.Fmt(run[3])} kcal   | bench {string.Join(",", bench)} (guest {G.Guest ?? "-"}), {T:0} s, crew {G.CrewSize}, rank {G.Rank}");
                     // where it came from, and the letters behind it
                     Lessons.Add("        by: " + string.Join("  ", _by.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + GameState.Fmt(kv.Value))));
                     if (G.Lessons % 3 == 0) Lessons.Add("        payback: " + Paybacks());
@@ -272,130 +354,58 @@ namespace ChalkPhysics.EditorTools
             }
             static string Coin(Cur c) => c == Cur.J ? "J" : c == Cur.Obs ? "i" : c == Cur.C ? "C" : "K";
 
-            /// One action, chosen the way AutoPlayBot chooses it.
-            bool Act()
+            /// The bot's own places: the instruments that brought the biggest share of some currency last time (a new
+            /// one first, to try it), so every coin keeps its source.
+            readonly Dictionary<string, double> _share = new Dictionary<string, double>();
+            void ChooseBench()
             {
-                var all = Stations();
-                if (G.LaunchMode) return Launch(all);
-                string pick = null; Sample sample = null;
-                int free = G.Samples.Count(Free);
-                bool manualWants = all.Exists(st => !G.Automated(st) && NeedsSample(st));
-                // 1. idle automatons get a specimen
-                for (int i = all.Count - 1; i >= 0 && pick == null && !(manualWants && free <= 1); i--)
-                {
-                    var st = all[i];
-                    if (!G.Automated(st) || !NeedsSample(st) || _res.ContainsKey(st)) continue;
-                    sample = G.BestSampleFor(MainFormula(G, st), Free);
-                    if (sample != null) pick = st;
-                }
-                // 2. weigh a couple of unknown specimens
-                var unknown = G.Samples.FindAll(x => !x.knowM && Free(x));
-                if (pick == null && G.Built("dyna") && !G.Automated("dyna") && unknown.Count > 0 && G.Samples.Count - unknown.Count < 2)
-                { pick = "dyna"; sample = unknown[_rng.Next(unknown.Count)]; }
-                // 2b. keep the steam bench warm
-                if (pick == null && G.Built("heat") && !G.Automated("heater") && G.Boiler < 0.55f && (G.Built("engine") || G.Built("ice") || G.Built("gas")))
-                { sample = G.BestSampleFor(Defs.F("heat"), Free); if (sample != null) pick = "heater"; }
-                // 3. the manual stations in turn
-                if (pick == null)
-                {
-                    var manual = new List<string>();
-                    for (int i = all.Count - 1; i >= 0; i--) if (!G.Automated(all[i])) manual.Add(all[i]);
-                    // on the real bench an instrument is busy for ~1.3 s after it fires, so the bot moves on to the
-                    // next one; with no animations here the manual instruments simply take turns
-                    _rr++;
-                    int shift = _rr;
-                    var order = new List<string>();
-                    for (int i = 0; i < manual.Count; i++) order.Add(manual[(i + shift) % manual.Count]);
-                    foreach (var st in order)
-                    {
-                        if (st == "stand") { if (_sockets.Take(Defs.StandSlots(G)).Any(x => x == null)) continue; pick = st; sample = null; break; }
-                        if (NeedsSample(st)) { sample = G.BestSampleFor(MainFormula(G, st), Free); if (sample == null) continue; }
-                        else sample = null;
-                        pick = st; break;
-                    }
-                }
-                if (pick == null)
-                {   // nothing manual to do: push an automaton by hand
-                    pick = all.FirstOrDefault(st => G.Automated(st) && (!NeedsSample(st) || _res.ContainsKey(st)));
-                    if (pick == null) return false;
-                    sample = _res.TryGetValue(pick, out var r) ? r : null;
-                }
-                Do(pick, sample, true, 1);
-                G.UseAction();
-                AutoAlong(pick);
-                return true;
+                var all = G.BuiltStations();
+                var order = all.OrderByDescending(st => _share.TryGetValue(st, out var v) ? v : 10.0).ToList();
+                G.Loadout.Clear();
+                foreach (var st in order) if (G.Loadout.Count < G.OwnSlots) G.Loadout.Add(st);
             }
-
-            bool Launch(List<string> all)
+            void Shares()
             {
-                for (int k = 0; k < G.PlaceBudget; k++)
+                var tot = new double[4];
+                foreach (var kv in _earned) tot[(int)kv.Key.c] += kv.Value;
+                foreach (var st in G.Bench) _share[st] = 0;
+                foreach (var kv in _earned)
                 {
-                    var st = all.LastOrDefault(s => NeedsSample(s) && !_res.ContainsKey(s));
-                    if (st == null) break;
-                    var smp = G.BestSampleFor(MainFormula(G, st), Free);
-                    if (smp == null) break;
-                    _res[st] = smp;
-                }
-                int whole = Whole();
-                foreach (var st in all)
-                {
-                    if (st == "stand" ? _sockets.Take(Defs.StandSlots(G)).Any(x => x == null) : NeedsSample(st) && !_res.ContainsKey(st)) continue;
-                    int times = G.Automated(st) ? Math.Max(1, whole) : 1;
-                    var smp = _res.TryGetValue(st, out var r) ? r : null;
-                    if (st == "pend") _pendHang++;
-                    Do(st, smp, false, times);
-                }
-                G.UseAction();
-                return true;
-            }
-
-            int Whole() { double n = G.AutoMult; int w = (int)Math.Floor(n); if (_rng.NextDouble() < n - w) w++; return w; }
-
-            void AutoAlong(string except)
-            {
-                int whole = Whole();
-                if (whole <= 0) return;
-                foreach (var st in Stations())
-                {
-                    if (st == except || !G.Automated(st)) continue;
-                    if (NeedsSample(st) && !_res.ContainsKey(st)) continue;
-                    if (st == "pend") _pendHang++;
-                    Do(st, _res.TryGetValue(st, out var r) ? r : null, false, whole);
+                    var st = Defs.F(kv.Key.f).station;
+                    if (tot[(int)kv.Key.c] > 0) _share[st] = Math.Max(_share.TryGetValue(st, out var v) ? v : 0, kv.Value / tot[(int)kv.Key.c]);
                 }
             }
 
-            /// What the bench does: an automated instrument keeps the specimen it was given.
-            void Do(string st, Sample sample, bool manual, int times)
+            /// One run of an instrument, done this well; returns how long the instrument is busy with it.
+            float Work(string st, double q)
             {
-                if (manual && G.Automated(st) && NeedsSample(st) && sample != null) _res[st] = sample;
-                for (int i = 0; i < times; i++)
-                    switch (st)
-                    {
-                        case "fall": Fire("fall", sample, manual ? 1 : G.BallsPerDrop); break;
-                        case "pend":
-                            {   // every push is worth PendSwings swings, one idea-firing each; fractions carry over
-                                if (manual) _pendHang = 0;
-                                _pendAcc += G.PendSwings;
-                                while (_pendAcc >= 1) { _pendAcc -= 1; Fire("pend", sample, G.PendFatigue(_pendHang)); }
-                                break;
-                            }
-                        case "stand":
-                            Fire("ohm", _sockets[0]); Fire("charge", _sockets[0]); Fire("pow", _sockets[0]); Fire("lamp", _sockets[0]);
-                            Fire("cap", _sockets[1]); Fire("coil", _sockets[2]);
-                            break;
-                        case "engine": Fire("carnot", null); Fire("engine", null); break;
-                        case "piston": Fire("gas", null); break;
-                        case "heater": Fire("heat", sample); break;
-                        case "calor": Fire("calm", sample); break;
-                        default: Fire(MainFormula(G, st).id, sample); break;
-                    }
+                G.MarkUsed(st);
+                var smp = _res.TryGetValue(st, out var r) ? r : null;
+                switch (st)
+                {
+                    case "fall":
+                        for (int k = 0; k < G.BallsPerDrop; k++) Fire("fall", smp, q);
+                        return 0.6f + 1.6f;                                   // the fall, then the bounces on the peg
+                    case "spring": Fire("spring", smp, q); return 1.7f;       // the jump (its measure is the hand's time)
+                    case "dyna": Fire("dyna", smp, q); return 2.4f;           // the spring settling before a good measure
+                    case "stand":
+                        Fire("ohm", _sockets[0], q); Fire("charge", _sockets[0], q); Fire("pow", _sockets[0], q); Fire("lamp", _sockets[0], q);
+                        Fire("cap", _sockets[1], q); Fire("coil", _sockets[2], q);
+                        return RunSec;
+                    case "engine": Fire("carnot", null, q); Fire("engine", null, q); return RunSec;
+                    case "piston": Fire("gas", null, q); return RunSec;
+                    case "heater": Fire("heat", smp, q); return RunSec;
+                    case "calor": Fire("calm", smp, q); return RunSec;
+                    case "arch": Fire("arch", smp, q); return 0.4f;
+                    default: Fire(MainFormula(G, st).id, smp, q); return RunSec;
+                }
             }
 
             void Fire(string id, Sample sample, double extra = 1)
             {
                 if (!G.Built(id)) return;
                 var f = Defs.F(id);
-                double mult = (G.HasPerk("crit") && _rng.NextDouble() < 0.1 ? 2 : 1) * extra;
+                double mult = (G.HasPerk("crit") && _rng.NextDouble() < 0.1 ? 2 : 1) * extra * (f.station == G.Guest ? G.GuestMult : 1);
                 var yc = f.kind == FKind.Energy ? f.yields : Cur.Obs;
                 double y = G.YieldOf(f, yc, sample) * mult;
                 _by[id + (yc == Cur.Obs ? "(i)" : "")] = (_by.TryGetValue(id + (yc == Cur.Obs ? "(i)" : ""), out var was) ? was : 0) + y;

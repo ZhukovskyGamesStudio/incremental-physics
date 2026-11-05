@@ -25,11 +25,16 @@ namespace ChalkPhysics
         public static readonly Dictionary<string, SlotArt[]> Art = new Dictionary<string, SlotArt[]>
         {
             { "fall", new[] { L("m", -80, 262, -10, 228), Arrow("g", -135, 215, -125, 185, -125, 125), Dim("h", 110, 100, 70, 0, 70, 200) } },
-            { "dyna", new[] { L("m", -80, 60, -21, 55), Arrow("g", 100, 50, 50, 60, 50, 10) } },
+            { "dyna", new[] { L("m", -95, 133, -22, 133), Arrow("g", 95, 140, 48, 150, 48, 95) } },
             { "spring", new[] { L("k", -80, 50, -8, 50), Dim("x", 90, 100, 45, 118, 45, 85) } },
             { "pend", new[] { Dim("l", -30, 200, 40, 300, 108, 112), Arrow("g", 150, 60, 120, 90, 120, 40) } },
             { "arch", new[] { L("rho", 140, 60, 110, 75), Arrow("g", -110, 70, -30, 85, -30, 40), L("V", 60, 165, 60, 62) } },
             { "density", new[] { Dim("V", 100, 110, 52, 88, 52, 132), Dim("dv", -110, 118, -44, 108, -44, 118) } },
+            // the 3D lab's theories: the bath (the area of the bottom, the rise of the water), the density (the sample's
+            // mass, the volume it pushes the water up by), the inclined plane (the angle where the sample slides)
+            { "bath", new[] { L("S", -130, 55, -30, 33), Dim("h", 105, 110, 54, 88, 54, 132) } },
+            { "dens", new[] { L("m", -130, 75, -22, 60), Dim("Vb", 105, 110, 54, 88, 54, 132) } },
+            { "incline", new[] { L("a3", 10, -60, 52, 16) } },
             { "slide", new[] { L("mu", 60, -55, 15, -2), L("m", -110, 45, -21, 25), Arrow("g", 100, 45, 60, 60, 60, 25), Dim("d", 10, 105, -70, 70, 90, 70) } },
             { "friction", new[] { L("mu", -40, -55, -40, -2), L("m", -120, 60, -61, 30), Arrow("g", 30, 105, 0, 90, 0, 50) } },
             { "fly", new[] { L("I", 60, 200, 60, 157), Spin("w", 165, 130, 60, 100, 78) } },
@@ -43,7 +48,7 @@ namespace ChalkPhysics
         };
 
         /// The sketch of a formula uses its station's drawing, except the formula of everything.
-        public static string Sketch(FormulaDef f) => f.kind == FKind.Final ? "psi" : f.station;
+        public static string Sketch(FormulaDef f) => f.kind == FKind.Final ? "psi" : f.id == "incline" ? "incline" : f.station.Length == 0 ? "density" : f.station;
 
         public static SlotArt[] For(string formulaId)
         {

@@ -114,6 +114,38 @@ namespace ChalkPhysics.EditorTools
                     Directory.CreateDirectory(Dir);
                     File.WriteAllText(Path.Combine(Dir, "icons.txt"), list.ToString());
                     break;
+                case "icon":   // one icon in the middle, k times its map size
+                    Lab.DrawIcon(UIF.Shape(root, 900, parts[1]), parts[1], ChalkTex.White, k);
+                    break;
+                case "sketch":   // a formula's instrument as the theory screen draws it, centred
+                    {
+                        var f = Defs.F(parts[1]);
+                        var bounds = Puzzles.Bounds(f);
+                        var s = UIF.Shape(root, 901, "Sketch");
+                        s.rectTransform.anchoredPosition = -bounds.center;
+                        if (f.kind != FKind.Final) s.Ground(new Vector2(bounds.xMin, 0), new Vector2(bounds.xMax, 0), new Color(1, 1, 1, 0.5f), 3f, 8f, 16f);
+                        StationArt.Draw(s, Puzzles.Sketch(f), Vector2.zero, new StationArt.Look { shelfY = 200, pendLen = 200, sketch = true, upTo = f.id });
+                        break;
+                    }
+                case "samples":   // every specimen look: rows by volume, columns by density (light to heavy), the golden ones last
+                    {
+                        var app = Object.FindAnyObjectByType<Apparatus>(FindObjectsInactive.Include);
+                        var draw = typeof(Apparatus).GetMethod("DrawSample", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (app == null || draw == null) return "no apparatus to draw samples with";
+                        var s = UIF.Shape(root, 902, "Samples");
+                        int[] hatch = { 5, 3, 4, 1, 0, 2 };
+                        double[] vols = { 0.5, 1, 2, 3 };
+                        for (int r = 0; r < vols.Length; r++)
+                            for (int c = 0; c < hatch.Length + 1; c++)
+                            {
+                                var smp = new Sample { massR = vols[r], volR = vols[r], pattern = c < hatch.Length ? hatch[c] : 2, golden = c == hatch.Length, knowGold = c == hatch.Length };
+                                draw.Invoke(app, new object[] { s, smp, new Vector2((c - 3) * 110, (1.5f - r) * 110), 1f, false, 0f });
+                            }
+                        break;
+                    }
+                case "chalkie":   // the chalk helper, arms up
+                    Apparatus.Chalkie(UIF.Shape(root, 903, "Chalkie"), Vector2.zero, k, parts.Length > 1 && parts[1] == "yellow" ? ChalkTex.Yellow : ChalkTex.White, 0.9f, 0.9f);
+                    break;
                 default:
                     return "unknown composition " + parts[0];
             }

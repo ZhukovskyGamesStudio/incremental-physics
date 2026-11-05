@@ -1,0 +1,4 @@
+Sound effects in this folder: "100 CC0 SFX" from OpenGameArt.org
+https://opengameart.org/content/100-cc0-sfx
+License: CC0 (public domain). Renamed: paper_* (paper_01-04), pickup_* (wooden_01-03),
+spring_* (spring_03, 04, 05, 07, 09), splash_* (splash_01-02), plop_* (plop_01-02).

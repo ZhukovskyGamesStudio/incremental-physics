@@ -8,7 +8,7 @@ namespace ChalkPhysics
     public class AutoPlayBot : MonoBehaviour
     {
         public float thinkPerLetter = 2.5f;      // seconds to put one letter into a draft
-        public float actionEvery = 1.0f;         // seconds between manual actions in a lesson
+        public float actionEvery = 0.45f;        // seconds between moves of the hand in a run
         public float breakTime = 6f;             // seconds spent on the map
 
         public static readonly List<string> Lines = new List<string>();
@@ -56,67 +56,31 @@ namespace ChalkPhysics
             if (G.Phase == Phase.Lesson)
             {
                 _act += dt;
-                if (_act >= actionEvery && G.ActionsLeft > 0)
+                if (_act < actionEvery) return;
+                _act = 0;
+                _app.BotStart();
+                _app.BotCrew();
+                if (Random.value < 0.3f) _app.BotExam();
+                // an empty instrument gets a specimen (the measuring ones an unknown one first) …
+                foreach (var st in G.Bench)
                 {
-                    _act = 0;
-                    // the circuit: fill its sockets (free), then close the switch
-                    if (_app.CircuitWants)
+                    if (st == "stand")
                     {
-                        var f0 = Defs.F("ohm");
-                        var sm = G.BestSampleFor(f0, _app.Free);
-                        if (sm != null) { _app.BotAction("stand", sm); _act = actionEvery - 0.25f; return; }
+                        if (!_app.CircuitWants) continue;
+                        var sm = G.BestSampleFor(Defs.F("ohm"), _app.Free);
+                        if (sm != null && _app.BotFeed("stand", sm)) return;
+                        continue;
                     }
-                    if (G.LaunchMode) { LaunchTurn(); return; }
-                    // a thoughtful player: first measure a couple of unknown samples, then exploit the best known one
-                    var all = new List<string>();
-                    foreach (var f in Defs.Formulas)
-                        if (G.Built(f.id) && f.station.Length > 0 && !all.Contains(f.station)) all.Add(f.station);
-                    string pick = null;
-                    Sample sample = null;
-                    // 1. give idle automated instruments a sample: it works for the rest of the lesson —
-                    //    but keep one sample for the newest manual instrument when the box runs short
-                    int free = G.Samples.Count(x => _app.Free(x));
-                    bool manualWants = all.Exists(st => !G.Automated(st) && _app.NeedsSampleAt(st));
-                    for (int i = all.Count - 1; i >= 0 && pick == null && !(manualWants && free <= 1); i--)
-                    {
-                        var st = all[i];
-                        if (!G.Automated(st) || !_app.NeedsSampleAt(st) || _app.HasResident(st) || !_app.Ready(st)) continue;
-                        var f = Defs.Formulas.Find(x => x.station == st && G.Built(x.id));
-                        sample = G.BestSampleFor(f, _app.Free);
-                        if (sample != null) pick = st;
-                    }
-                    // 2. weigh a couple of unknown samples by hand
-                    var unknown = G.Samples.FindAll(x => !x.knowM && _app.Free(x));
-                    if (pick == null && G.Built("dyna") && !G.Automated("dyna") && unknown.Count > 0 && G.Samples.Count - unknown.Count < 2 && _app.Ready("dyna")) { pick = "dyna"; sample = unknown[Random.Range(0, unknown.Count)]; }
-                    // 2b. the steam bench runs on heat: keep it warm before anything else
-                    if (pick == null && G.Built("heat") && !G.Automated("heater") && G.Boiler < 0.55f && (G.Built("engine") || G.Built("ice") || G.Built("gas")) && _app.Ready("heater"))
-                    {
-                        sample = G.BestSampleFor(Defs.F("heat"), _app.Free);
-                        if (sample != null) pick = "heater";
-                    }
-                    // 3. the manual stations in turn (a player uses them all), then a manual repeat on an automated one
-                    if (pick == null)
-                    {
-                        var order = new List<string>();
-                        var manual = new List<string>();
-                        for (int i = all.Count - 1; i >= 0; i--) if (!G.Automated(all[i])) manual.Add(all[i]);
-                        _rr++;
-                        int shift = G.Built("heat") ? _rr : 0;   // the steam bench wants all its instruments; before it, the newest pays best
-                        for (int i = 0; i < manual.Count; i++) order.Add(manual[(i + shift) % manual.Count]);
-                        for (int i = all.Count - 1; i >= 0; i--) if (G.Automated(all[i])) order.Add(all[i]);
-                        foreach (var st in order)
-                        {
-                            if (!_app.Ready(st)) continue;
-                            if (st == "stand") { if (!_app.CircuitArmed) continue; sample = null; pick = st; break; }   // the circuit: close the switch
-                            var f = Defs.Formulas.Find(x => x.station == st && G.Built(x.id));
-                            if (f.sample && G.Automated(st)) { if (!_app.HasResident(st)) continue; sample = null; }
-                            else if (f.sample) { sample = G.BestSampleFor(f, _app.Free); if (sample == null) continue; }
-                            else sample = null;
-                            pick = st; break;
-                        }
-                    }
-                    if (pick == null) { _act = actionEvery - 0.3f; return; }
-                    _app.BotAction(pick, sample);
+                    if (!_app.NeedsSampleAt(st) || _app.HasResident(st)) continue;
+                    var f = Defs.Formulas.Find(x => x.station == st && G.Built(x.id));
+                    var s = G.BestSampleFor(f, _app.Free);
+                    if (s != null && _app.BotFeed(st, s)) return;
+                }
+                // … then the instruments that have settled are worked in turn
+                for (int i = 0; i < G.Bench.Count; i++)
+                {
+                    var st = G.Bench[(_rr + i) % G.Bench.Count];
+                    if (_app.BotWork(st)) { _rr++; return; }
                 }
                 return;
             }
@@ -140,32 +104,15 @@ namespace ChalkPhysics
                 _break = 0;
                 Spend();
                 if (!G.AnyStation) { _break = breakTime - 0.5f; return; }
-                GameRoot.I.StartLesson();
+                GameRoot.I.StartLesson(false);
             }
         }
 
-        /// With the launch console the bench is set up first and fired afterwards: load the empty instruments
-        /// while rearrangements last, then press "Пуск".
-        void LaunchTurn()
-        {
-            if (G.Places > 0)
-            {
-                var stations = new List<string>();
-                foreach (var f in Defs.Formulas)
-                    if (G.Built(f.id) && f.station.Length > 0 && !stations.Contains(f.station)) stations.Add(f.station);
-                for (int i = stations.Count - 1; i >= 0; i--)
-                {
-                    var st = stations[i];
-                    if (!_app.NeedsSampleAt(st) || _app.HasResident(st) || !_app.Ready(st)) continue;
-                    var f = Defs.Formulas.Find(x => x.station == st && G.Built(x.id));
-                    var s = G.BestSampleFor(f, _app.Free);
-                    if (s != null) { _app.BotAction(st, s); return; }
-                }
-            }
-            if (!_app.Launch()) _act = actionEvery - 0.3f;
-        }
+        void Spend() => Shop(G, Log);
 
-        void Spend()
+        /// The bot's break on the map: a revolution when it can, else every letter on offer, the cheapest upgrades and
+        /// letter levels. The 3D check (Editor/Lab3DCheck) shops between its days with it too.
+        public static void Shop(GameState G, System.Action<string> Log)
         {
             if (G.CanRevolt) { G.Revolt(); return; }
             // joules: open every letter on offer (they open new formulas), then the gate; keep the rest for levels
@@ -179,12 +126,12 @@ namespace ChalkPhysics
             foreach (var g in Defs.Gates) if (G.CanBuyGate(g.id)) G.BuyGate(g.id);
             // upgrades, in each coin: ideas buy the cheapest few; joules buy a machine only while it costs at most half the
             // wallet, since the rest goes to letter levels
-            foreach (var coin in new[] { Cur.Obs, Cur.J, Cur.C, Cur.Cal })
+            foreach (var coin in new[] { Cur.Obs, Cur.J, Cur.C, Cur.Cal, Cur.Coin })
                 for (int buys = 0; buys < 3; buys++)
                 {
                     var perk = Defs.Perks.Where(p => !G.HasPerk(p.id) && p.cost == coin && !p.Teaser && G.PerkOpen(p) && p.domain <= G.Era).OrderBy(p => p.price).FirstOrDefault();
                     var dev = G.AvailableDevices().Where(d => d.cost == coin && G.ChainOpen(d.requires)).OrderBy(d => d.price).FirstOrDefault();
-                    double have = G.Cur[(int)coin] * (coin == Cur.Obs ? 1 : 0.5);
+                    double have = G.Cur[(int)coin] * (coin is Cur.Obs or Cur.Coin ? 1 : 0.5);
                     if (perk != null && (dev == null || perk.price <= dev.price) && have >= perk.price) { G.BuyPerk(perk.id); Log("perk " + perk.id); }
                     else if (dev != null && have >= dev.price) { G.BuyDevice(dev.id); Log("device " + dev.id); }
                     else break;
@@ -195,10 +142,10 @@ namespace ChalkPhysics
             double reserve = 0;
             foreach (var l in Defs.Letters) if (!G.Known.Contains(l.id) && !l.Derived && l.openCur == Cur.J && G.NodeVisible("L:" + l.id)) reserve = System.Math.Max(reserve, G.OpenCost(l.id));
             if (G.RevolutionOffered) reserve = System.Math.Max(reserve, G.NextRevolution.cost);
-            BuyLetters(reserve > 0 ? 0.5 : 0.7, reserve);
+            BuyLetters(G, reserve > 0 ? 0.5 : 0.7, reserve);
         }
 
-        void BuyLetters(double frac, double reserve)
+        static void BuyLetters(GameState G, double frac, double reserve)
         {
             var start = (double[])G.Cur.Clone();
             for (int guard = 0; guard < 60; guard++)

@@ -6,7 +6,8 @@ namespace ChalkPhysics
 {
     /// Legacy UGUI text cannot hold a picture, so the lightbulb of ideas is drawn by hand into the line: every "¤"
     /// becomes an invisible stretch of glyphs (so the line keeps its width and its alignment) and a chalk bulb is
-    /// drawn over it. One line of text; the bulb follows the text's scale, rotation and fading.
+    /// drawn over it; every "¢" the same way gets a chalk coin. One line of text; the icons follow the text's scale,
+    /// rotation and fading.
     public class InkText : MonoBehaviour
     {
         const string Hidden = "<color=#00000000>{0}</color>";
@@ -16,6 +17,7 @@ namespace ChalkPhysics
         string _raw;
         Color _bulb = ChalkTex.Cyan;
         readonly List<float> _at = new List<float>();
+        readonly List<string> _coin = new List<string>();   // which icon each mark is, in order: bulb, coin, star
         float _w, _y;
         bool _dirty;
 
@@ -43,7 +45,9 @@ namespace ChalkPhysics
             if (raw == _raw && bulb == _bulb) return;
             _raw = raw ?? ""; _bulb = bulb;
             _gap = MakeGap();
-            _t.text = _raw.Replace(GameState.Bulb, _gap);
+            _coin.Clear();
+            foreach (var ch in _raw) { if (ch == GameState.Bulb[0]) _coin.Add("bulb"); else if (ch == GameState.Coin[0]) _coin.Add("coin"); else if (ch == GameState.Star[0]) _coin.Add("trust"); }
+            _t.text = _raw.Replace(GameState.Bulb, _gap).Replace(GameState.Coin, _gap).Replace(GameState.Star, _gap);
             _dirty = true;
             Layout();
         }
@@ -126,7 +130,11 @@ namespace ChalkPhysics
             _s.Clear();
             if (_at.Count == 0) return;
             float k = BulbScale;
-            foreach (var x in _at) Lab.DrawIcon(_s, "bulb", _bulb, k, new Vector2(x, _y + 1));
+            for (int i = 0; i < _at.Count; i++)
+            {
+                string icon = i < _coin.Count ? _coin[i] : "bulb";
+                Lab.DrawIcon(_s, icon, icon == "coin" ? ChalkTex.Green : icon == "trust" ? ChalkTex.Yellow : _bulb, k, new Vector2(_at[i], _y + 1));
+            }
             var c = _t.color;
             _s.color = new Color(1, 1, 1, c.a);
         }

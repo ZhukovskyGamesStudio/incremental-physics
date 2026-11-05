@@ -19,8 +19,24 @@
 
 - Unity, C#, код в `Assets/Scripts`. Данные игры (буквы, формулы, приборы, перки, дерево) — `Assets/Scripts/Core/Defs.cs`,
   правила — `Assets/Scripts/Core/GameState.cs`.
+- 3D-лаборатория — `Assets/Scripts/Lab3D`: `Lab3DGame` — координатор дня; его части — `LabRoom` (стены, места столов),
+  `LabHud`, `CustomerLine` (заказчики, расписание), `OrderBook` (листки, оплата), `DispatchDesk` (печать, ящик), `LabHands`
+  (клики), `LabPointer` (прицел), `PlayerBody`, `LabLights`. Приборы: `Apparatus3D` → `MeasuringApparatus` (шкала,
+  погрешность) и `OddApparatus` (необычные отделы); общие помощники построения — `Art3D`.
 - Любое изменение баланса проверяй прогоном: `powershell -File Tools/BalanceSim/run.ps1` (Unity в batch-режиме
   на копии проекта, редактор может быть открыт) — минуты до каждой вехи и лог первого прохода по экспериментам.
   Сравнивай «до» и «после», а не абсолютные минуты: бот играет быстрее человека.
+- Изменения экрана эксперимента (Apparatus.cs, Bench.cs) проверяй дымовым тестом: `powershell -ExecutionPolicy Bypass -File Tools/Smoke/run.ps1 -Sec 1500`
+  — настоящая игра в режиме игры с ботом, ускоренная; пишет все ошибки. Идёт долго, запускай в фоне.
+- 3D-лаборатория (раздел 2б DESIGN.md): модели строятся кодом в Blender (`Tools/Blender/lab3d.py`, Blender —
+  `D:\Apps\Steam\steamapps\common\Blender`), сцену `Assets/Scenes/Lab3D.unity` собирает `Assets/Editor/Lab3DBuilder.cs`.
+  Пересобрать и снять картинки в `Build/Lab3D`: `powershell -ExecutionPolicy Bypass -File Tools/Lab3D/run.ps1 [-Check]`
+  (`-Check [-Min 30]` — ещё и новая игра: карта → день (бот `Lab3DBot` выполняет заказы) → дверь → карта, до конца
+  первой эпохи или `-Min` игровых минут, ускоренно ×6 (~6–8 мин), без звука, сохранение в памяти: что куплено на
+  карте, итог и число заказов каждого дня, сколько дал каждый отдел, что делают мелки, все ошибки — в
+  `Temp/lab3d_check.txt`, кадры заказов, дня, вечера и карты — `Build/Lab3D/*.png`; запускай в фоне; `-Grow` — после
+  1-го и 2-го дня отделы даются насильно, чтобы снять, как растёт комната, кадры `room_N.png`).
+  Билд для геймдизайнера: `powershell -ExecutionPolicy Bypass -File Tools/Build/win.ps1` → `Build/Windows`. Работает на самом
+  проекте, поэтому редактор Unity должен быть закрыт; при открытом — меню Chalk / Lab 3D. Картинки смотри глазами.
 - Тексты для игрока — на русском. Термины — по словарю из DESIGN.md (раздел 9).
 - Файлы с кодом — в CRLF; `sed -i` в Git Bash ломает окончания строк, правь через Edit или Python.

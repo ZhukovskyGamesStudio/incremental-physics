@@ -186,47 +186,34 @@ namespace ChalkPhysics
             switch (st)
             {
                 case "fall":
-                    {   // a small table with a trapdoor in the middle of its top (the leaves are drawn live on the bench);
-                        // the specimen drops straight down between the legs
-                        float sy = k.shelfY, cx = o.x - 10;
+                    {   // a post with a bracket at its top: a specimen can be lifted up to the bracket (the height h) and let
+                        // fall onto the peg below it (the peg is drawn live on the bench)
+                        float sy = k.shelfY, cx = o.x - 10, px = o.x + 40;
                         bool x2 = k.Perk("fallx2"), x3 = k.Perk("fallx3");
                         float lw = x3 ? 6.5f : 4.5f;
-                        S.Line(new Vector2(o.x - 60, sy), new Vector2(cx - 38, sy), ChalkTex.Cyan, lw);
-                        S.Line(new Vector2(cx + 38, sy), new Vector2(o.x + 40, sy), ChalkTex.Cyan, lw);
-                        S.Line(new Vector2(o.x - 55, sy), new Vector2(o.x - 55, o.y), W, 3f);
-                        S.Line(new Vector2(o.x + 35, sy), new Vector2(o.x + 35, o.y), W, 3f);
-                        if (x2) S.Line(new Vector2(o.x + 35, sy - 34), new Vector2(o.x + 50, sy - 4), W, 2.5f);        // a brace for heavy loads
-                        if (x3) { S.Line(new Vector2(o.x - 55, sy - 60), new Vector2(o.x - 70, sy - 6), W, 2.5f); S.Line(new Vector2(o.x + 35, sy - 60), new Vector2(o.x + 50, sy - 6), W, 2.5f); }
-                        if (k.Dev("hopper"))
-                        {   // the latch motor: a little box behind the shelf (its rod and gear are drawn live)
-                            S.Rect(new Vector2(o.x - 106, sy + 24), new Vector2(30, 40), W, 3f);
-                            S.Line(new Vector2(o.x - 106, sy + 4), new Vector2(o.x - 106, sy), W, 3f);
-                            S.Line(new Vector2(o.x - 120, sy), new Vector2(o.x - 92, sy), W, 3f);
-                        }
+                        S.Line(new Vector2(px, o.y), new Vector2(px, sy + 10), W, x2 ? 4f : 3f);                       // the post
+                        S.Line(new Vector2(cx - 40, sy), new Vector2(px + 6, sy), ChalkTex.Cyan, lw);                // the bracket: the top
+                        S.Line(new Vector2(px - 20, o.y), new Vector2(px + 20, o.y), W, 3f);                          // its foot
+                        for (float y = o.y + 20; y < sy - 4; y += 20) S.Line(new Vector2(px, y), new Vector2(px - 7, y), Dim, 1.8f);
+                        if (x3) S.Line(new Vector2(px, sy - 40), new Vector2(px - 30, sy - 4), W, 2.5f);             // a brace for heavy loads
                         if (k.sketch)
-                        {   // the theory's sketch: the shut trapdoor, the specimen on it, its way down
-                            S.Line(new Vector2(cx - 38, sy), new Vector2(cx + 38, sy), ChalkTex.Cyan, lw);
+                        {   // the theory's sketch: the specimen held at the top, its way down onto the peg
                             Sample(S, new Vector2(cx, sy + 21));
-                            S.Dashed(new Vector2(cx, sy - 6), new Vector2(cx, o.y + 42), Dim, 1.5f, 5f, 5f);
+                            S.Dashed(new Vector2(cx, sy - 6), new Vector2(cx, o.y + 40), Dim, 1.5f, 5f, 5f);
+                            S.Line(new Vector2(cx, o.y), new Vector2(cx, o.y + 16), W, 6f);
                         }
                         break;
                     }
                 case "dyna":
                     {
-                        S.Line(o + new Vector2(-60, 300), o + new Vector2(60, 300), W, 4f);
-                        S.Line(o + new Vector2(0, 300), o + new Vector2(0, 270), W, 2.5f);
-                        S.Rect(o + new Vector2(0, 200), new Vector2(50, 140), W, 3f);
-                        int ticks = k.Perk("dynax2") ? 12 : 6; float step = k.Perk("dynax2") ? 9 : 18;
-                        for (int i = 0; i < ticks; i++) S.Line(o + new Vector2(-14, 250 - i * step), o + new Vector2(i % 2 == 0 ? 0 : -6, 250 - i * step), Dim, 2f);
-                        if (k.Perk("dynax3"))
-                        {   // a vernier beside the scale
-                            S.Line(o + new Vector2(32, 240), o + new Vector2(32, 170), W, 2f);
-                            for (int i = 0; i < 6; i++) S.Line(o + new Vector2(32, 235 - i * 12), o + new Vector2(40, 235 - i * 12), Dim, 1.8f);
-                        }
+                        // a bar with a short spring under it: the ruler drawn by the hand is the scale
+                        S.Line(o + new Vector2(-60, 300), o + new Vector2(60, 300), W, k.Perk("dynax3") ? 5.5f : 4f);
+                        S.Line(o + new Vector2(0, 300), o + new Vector2(0, 285), W, 2.5f);
+                        if (k.Perk("dynax2")) S.Line(o + new Vector2(-50, 306), o + new Vector2(50, 306), Dim, 2f);
                         if (k.sketch)
                         {
-                            float plateY = 120;
-                            S.Zigzag(o + new Vector2(0, 270), o + new Vector2(0, plateY), 6, 10, W, 2.5f);
+                            float plateY = 200;
+                            S.Zigzag(o + new Vector2(0, 285), o + new Vector2(0, plateY), 6, 10, W, 2.5f);
                             S.Line(o + new Vector2(-16, plateY - 8), o + new Vector2(16, plateY - 8), ChalkTex.Cyan, 4f);
                             S.Line(o + new Vector2(0, plateY - 8), o + new Vector2(0, plateY - 26), W, 2.5f);
                             S.Arc(o + new Vector2(0, plateY - 36), 10, Mathf.PI * 0.2f, Mathf.PI * 1.6f, ChalkTex.Cyan, 3f);
@@ -239,7 +226,6 @@ namespace ChalkPhysics
                         S.Line(o + new Vector2(-30, 0), o + new Vector2(30, 0), W, 4f);
                         S.Line(o + new Vector2(-24, 0), o + new Vector2(-24, 10), W, 3f);
                         S.Line(o + new Vector2(24, 0), o + new Vector2(24, 10), W, 3f);
-                        if (k.Dev("cam")) { S.Rect(o + new Vector2(62, 60), new Vector2(30, 24), W, 2.5f); S.Line(o + new Vector2(47, 60), o + new Vector2(28, 60), Dim, 2f); }
                         if (k.sketch)
                         {
                             float plate = 8 + 110 * 0.7f;
@@ -299,6 +285,26 @@ namespace ChalkPhysics
                             S.Line(o + new Vector2(-38, 88), o + new Vector2(38, 88), new Color(0.45f, 0.86f, 1f, 0.6f), 2.5f);
                             S.Dashed(o + new Vector2(-38, 132), o + new Vector2(38, 132), new Color(0.45f, 0.86f, 1f, 0.6f), 2f, 6f, 6f);
                             Sample(S, o + new Vector2(0, 55));
+                        }
+                        break;
+                    }
+                case "incline":
+                    {   // a board hinged on the right, raised at an angle α to the table; the sample lies on it, about to slide
+                        var hinge = o + new Vector2(110, 0);
+                        float a = 30 * Mathf.Deg2Rad;
+                        var dir = new Vector2(-Mathf.Cos(a), Mathf.Sin(a));
+                        var up = new Vector2(Mathf.Sin(a), Mathf.Cos(a));
+                        S.Line(hinge, hinge + dir * 220, W, 4f);
+                        S.Circle(hinge, 5, W, 2.5f);
+                        S.Line(hinge + new Vector2(-6, -2), hinge + new Vector2(-6, -12), W, 2.5f);
+                        if (k.sketch)
+                        {
+                            S.Arc(hinge, 62, Mathf.PI - a, Mathf.PI, new Color(0.45f, 0.86f, 1f, 0.8f), 2.5f);   // the angle
+                            var b = hinge + dir * 140 + up * 2;
+                            const float s = 40;
+                            var pts = new[] { b - dir * s / 2, b + dir * s / 2, b + dir * s / 2 + up * s, b - dir * s / 2 + up * s };
+                            S.Poly(pts, W, 2.8f, true);
+                            S.Arrow(b + up * 58 + dir * 12, b + up * 58 - dir * 34, Dim, 2f, 8f);   // which way it will go
                         }
                         break;
                     }
