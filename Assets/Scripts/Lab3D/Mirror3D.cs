@@ -25,17 +25,11 @@ namespace ChalkPhysics.Lab3D
 
         protected override void Build(PersonaKit kit)
         {
-            // the frame and its feet
+            // the frame on its feet and the pedestal: the Blender model (Tools/Blender/odd.py, mirror)
             float cy = Bottom + H / 2;
-            Art3D.Part(PrimitiveType.Cube, kit.brown, transform, new Vector3(0, cy, Back - 0.012f), new Vector3(W + 0.08f, H + 0.08f, 0.02f));
-            Art3D.Part(PrimitiveType.Cube, kit.brown, transform, new Vector3(-W / 2 - 0.02f, Bottom / 2, Back), new Vector3(0.04f, Bottom, 0.18f));
-            Art3D.Part(PrimitiveType.Cube, kit.brown, transform, new Vector3(W / 2 + 0.02f, Bottom / 2, Back), new Vector3(0.04f, Bottom, 0.18f));
-            foreach (var (x, y, w, h) in new[] { (0f, Bottom - 0.02f, W + 0.08f, 0.04f), (0f, Bottom + H + 0.02f, W + 0.08f, 0.04f), (-W / 2 - 0.02f, cy, 0.04f, H + 0.08f), (W / 2 + 0.02f, cy, 0.04f, H + 0.08f) })
-                Art3D.Part(PrimitiveType.Cube, kit.yellow, transform, new Vector3(x, y, Back + 0.004f), new Vector3(w, h, 0.012f));
-            // the pedestal
-            Art3D.Part(PrimitiveType.Cylinder, kit.white, transform, new Vector3(0, 0.06f, 0.12f), new Vector3(0.12f, 0.06f, 0.12f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.white, transform, new Vector3(0, 0.125f, 0.12f), new Vector3(0.16f, 0.006f, 0.16f));
-            seat = Art3D.Empty("Seat", transform, new Vector3(0, 0.128f, 0.12f));
+            var m = ModelLibrary.Spawn("Odd_mirror", transform, kit)?.transform;
+            if (m == null) return;
+            seat = Art3D.Pivot(m, "Seat", transform);
             Art3D.Grip("Grip", transform, new Vector3(0, 0.45f, 0), new Vector3(W + 0.1f, 0.9f, 0.5f));
             // the glass: its own quad (its corners' texture places are set every frame), on a layer the mirror's camera skips
             var g = new GameObject("Glass", typeof(MeshFilter), typeof(MeshRenderer));

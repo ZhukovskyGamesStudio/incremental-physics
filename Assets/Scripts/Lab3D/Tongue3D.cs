@@ -10,29 +10,18 @@ namespace ChalkPhysics.Lab3D
     public class Tongue3D : OddApparatus
     {
         public static readonly string[] Zones = { "сладкое", "солёное", "кислое", "горькое", "умами" };
-        // on the tongue's top, its tip to the front (+z); salty on the left of whoever faces it, sour on the right
-        static readonly Vector3[] ZoneAt =
-        {
-            new Vector3(0, 0, 0.19f), new Vector3(0.105f, 0, 0.04f), new Vector3(-0.105f, 0, 0.04f), new Vector3(0, 0, -0.2f), new Vector3(0, 0, -0.07f),
-        };
-        /// Where each taste's card stands on the board, beside its place (the sweet one in front of the tip, the bitter one
-        /// behind the root, the others at the sides), and the colour its place and card share.
-        static readonly Vector3[] CardAt =
-        {
-            new Vector3(0, 0.02f, 0.31f), new Vector3(0.27f, 0.02f, 0.07f), new Vector3(-0.27f, 0.02f, 0.07f), new Vector3(0, 0.02f, -0.33f), new Vector3(-0.27f, 0.02f, -0.17f),
-        };
+        // the places are the model's (Tools/Blender/odd.py, tongue): on the tongue's top, its tip to the front (+z); salty
+        // on the left of whoever faces it, sour on the right; the cards stand round them on the board, leaning back
+        /// The colour each place and its card share, for the card's word.
         static readonly Color[] Ink =
         {
             ChalkTex.Yellow, ChalkTex.Cyan, ChalkTex.Green, new Color(0.8f, 0.62f, 1f), new Color(1f, 0.64f, 0.32f),
         };
-        const float Top = 0.072f;   // the tongue's top over the table
-
         Transform _body;
         readonly Transform[] _seats = new Transform[5];
         Collider _grip;
         LineRenderer _ring;
         readonly Transform[] _patches = new Transform[5];
-        readonly Vector3[] _patchSize = new Vector3[5];
         readonly Transform[] _cards = new Transform[5];
         int _zone = -1;
         float _t = -1;          // since the sample came onto its place
@@ -70,52 +59,29 @@ namespace ChalkPhysics.Lab3D
 
         bool OnMe() => Pointed != null && (Pointed == _grip || (Load != null && Pointed.transform.IsChildOf(Load.transform)));
 
-        /// The tongue's top over its body's origin at (x, z): the higher of its two humps (the long front one, the root).
-        static float SurfaceY(float x, float z)
-        {
-            float H(Vector3 c, Vector3 r)
-            {
-                float u = (x - c.x) / r.x, w = (z - c.z) / r.z;
-                float q = 1 - u * u - w * w;
-                return q <= 0 ? -1 : c.y + r.y * Mathf.Sqrt(q);
-            }
-            return Mathf.Max(H(new Vector3(0, 0, 0.02f), new Vector3(0.15f, 0.05f, 0.25f)), H(new Vector3(0, 0.005f, -0.17f), new Vector3(0.16f, 0.055f, 0.12f)));
-        }
-
         protected override Material Needs(PersonaKit kit) => kit.pink;
 
         protected override void Build(PersonaKit kit)
         {
-            // a wooden board under it, wide enough for the cards round it
-            Art3D.Part(PrimitiveType.Cube, kit.brown, transform, new Vector3(0, 0.01f, -0.01f), new Vector3(0.72f, 0.02f, 0.7f));
-            _body = Art3D.Empty("Tongue", transform, new Vector3(0, 0.02f, 0));
-            Art3D.Part(PrimitiveType.Sphere, kit.pink, _body, new Vector3(0, 0.0f, 0.02f), new Vector3(0.3f, 0.1f, 0.5f));
-            Art3D.Part(PrimitiveType.Sphere, kit.pink, _body, new Vector3(0, 0.005f, -0.17f), new Vector3(0.32f, 0.11f, 0.24f));
-            var paint = new[] { kit.yellow, kit.blue, kit.green, kit.purple, kit.orange };
+            // the Blender model: a wooden board, the pink tongue on it, five places of colour on the tongue, five cards
+            var m = ModelLibrary.Spawn("Odd_tongue", transform, kit)?.transform;
+            if (m == null) return;
+            _body = Art3D.Pivot(m, "Tongue", transform);
             for (int i = 0; i < 5; i++)
             {
-                var p = ZoneAt[i];
-                float y = SurfaceY(p.x, p.z);
-                _seats[i] = Art3D.Empty("Seat " + Zones[i], _body, new Vector3(p.x, y - 0.006f, p.z));
-                // the place itself: a patch of its colour lying on the tongue, along its curve, outlined in chalk
-                const float h = 0.004f;
-                var n = new Vector3(-(SurfaceY(p.x + h, p.z) - SurfaceY(p.x - h, p.z)) / (2 * h), 1, -(SurfaceY(p.x, p.z + h) - SurfaceY(p.x, p.z - h)) / (2 * h)).normalized;
-                _patchSize[i] = i == 0 ? new Vector3(0.075f, 0.012f, 0.062f) : new Vector3(0.088f, 0.012f, 0.088f);
-                _patches[i] = Art3D.Part(PrimitiveType.Sphere, paint[i], _body, new Vector3(p.x, y + 0.0015f, p.z), _patchSize[i], null, "Place " + Zones[i]);
-                _patches[i].localRotation = Quaternion.FromToRotation(Vector3.up, n);
-                // its card: a small dark board standing on the wooden one, leaning back, the taste written in the same colour
-                var stand = Art3D.Empty("Card " + Zones[i], transform, CardAt[i], new Vector3(-28, 0, 0));
-                Art3D.Part(PrimitiveType.Cube, kit.dark, stand, new Vector3(0, 0.032f, 0), new Vector3(0.19f, 0.064f, 0.008f));
-                Art3D.Part(PrimitiveType.Cube, paint[i], stand, new Vector3(0.077f, 0.032f, 0.0045f), new Vector3(0.018f, 0.018f, 0.002f));   // its colour, as a dot (on the reader's left)
-                var c = Art3D.Upright(stand, new Vector3(-0.012f, 0.032f, 0.0045f), new Vector2(160, 64));
+                _seats[i] = Art3D.Pivot(m, "Seat" + i, _body);
+                _seats[i].name = "Seat " + Zones[i];
+                _patches[i] = Art3D.Pivot(m, "Place" + i, _body);   // swells under the dot
+                _patches[i].name = "Place " + Zones[i];
+                // its card leans back on its strut: the taste written on it in the same colour as its place
+                _cards[i] = Art3D.Pivot(m, "Card" + i, transform, Quaternion.Euler(-28, 0, 0));
+                var c = Art3D.Upright(_cards[i], new Vector3(-0.012f, 0.032f, 0.0045f), new Vector2(160, 64));
                 Art3D.Word(c, Zones[i], Vector2.zero, 38, Ink[i], 160);
-                _cards[i] = stand;
             }
             // the salty and sour cards stand right by their places; umami's, at the side, points at the middle with an arrow
             {
-                var z = ZoneAt[4];
-                var to = _body.localPosition + new Vector3(z.x - 0.035f, SurfaceY(z.x, z.z) + 0.03f, z.z - 0.03f);
-                var from = CardAt[4] + new Vector3(0.1f, 0.07f, 0.01f);
+                var to = _body.localPosition + _seats[4].localPosition + new Vector3(-0.035f, 0.036f, -0.03f);
+                var from = _cards[4].localPosition + new Vector3(0.1f, 0.07f, 0.01f);
                 var l = Art3D.LocalLine("Arrow умами", transform, kit.line, 0.003f);
                 var d = (to - from).normalized;
                 var side = Vector3.Cross(d, Vector3.up).normalized * 0.018f;
@@ -174,7 +140,7 @@ namespace ChalkPhysics.Lab3D
             float pulse = 1.18f + 0.06f * Mathf.Sin(Time.time * 7);
             for (int i = 0; i < 5; i++)
             {
-                _patches[i].localScale = Vector3.Scale(_patchSize[i], i == lit ? new Vector3(pulse, 1.4f, pulse) : Vector3.one);
+                _patches[i].localScale = i == lit ? new Vector3(pulse, 1.4f, pulse) : Vector3.one;
                 _cards[i].localScale = Vector3.one * (i == lit ? 1.18f : 1);
             }
             if (Load != null && _t >= 0)

@@ -3,11 +3,27 @@ using UnityEngine.UI;
 
 namespace ChalkPhysics.Lab3D
 {
-    /// Things of the odd departments (DESIGN.md 2б, «Крейзи-измерения») are built at runtime of simple shapes in chalk,
-    /// as the customers are (Persona): a tongue, a tub with a rod, a cat, a mirror, a xylophone, a feather. The same
-    /// little makers serve the rest of the lab built at runtime: a scale's divisions, the loupe, the player's hands.
+    /// Little makers for what the lab builds at runtime: a scale's divisions, the loupe, the player's hands, chalk lines and
+    /// writing in the room — and the pivots of the Blender models' moving pieces (the odd departments' things, the desk's).
     public static class Art3D
     {
+        /// A moving piece of a Blender model (Tools/Blender/kit.py, «Moving pieces»): the model's marker `group` becomes
+        /// its pivot, under `parent`, turned `turn` there (none: as the parent); every part of the model named
+        /// "<group>-…" goes under it, staying where it is. The code then moves, turns or scales the pivot. A model without
+        /// that marker gets a new pivot at its origin.
+        public static Transform Pivot(Transform model, string group, Transform parent, Quaternion? turn = null)
+        {
+            var p = model.Find(group);
+            if (p == null) { p = new GameObject(group).transform; p.SetParent(model, false); }
+            p.SetParent(parent, true);
+            p.localRotation = turn ?? Quaternion.identity;
+            string prefix = group + "-";
+            var parts = new System.Collections.Generic.List<Transform>();
+            foreach (Transform c in model) if (c.name.StartsWith(prefix)) parts.Add(c);
+            foreach (var c in parts) c.SetParent(p, true);
+            return p;
+        }
+
         /// A shape the dot passes through (its collider gone); named, or with the name the engine gives it.
         public static GameObject Bare(PrimitiveType type, string name = null)
         {

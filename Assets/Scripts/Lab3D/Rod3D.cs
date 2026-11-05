@@ -44,66 +44,29 @@ namespace ChalkPhysics.Lab3D
 
         protected override void Build(PersonaKit kit)
         {
-            var wood = kit.brown;
-            // the tub
-            const float w = 1.5f, d = 0.72f, h = 0.5f, th = 0.05f;
-            Art3D.Part(PrimitiveType.Cube, wood, transform, new Vector3(0, 0.03f, 0), new Vector3(w, 0.06f, d));
-            Art3D.Part(PrimitiveType.Cube, wood, transform, new Vector3(0, h / 2, d / 2 - th / 2), new Vector3(w, h, th));
-            Art3D.Part(PrimitiveType.Cube, wood, transform, new Vector3(0, h / 2, -d / 2 + th / 2), new Vector3(w, h, th));
-            Art3D.Part(PrimitiveType.Cube, wood, transform, new Vector3(w / 2 - th / 2, h / 2, 0), new Vector3(th, h, d));
-            Art3D.Part(PrimitiveType.Cube, wood, transform, new Vector3(-w / 2 + th / 2, h / 2, 0), new Vector3(th, h, d));
-            foreach (float y in new[] { 0.12f, 0.38f })   // hoops round it
-                Art3D.Part(PrimitiveType.Cube, kit.metal, transform, new Vector3(0, y, d / 2 + 0.003f), new Vector3(w + 0.01f, 0.025f, 0.01f));
-            Art3D.Part(PrimitiveType.Cube, kit.dark, transform, new Vector3(0, 0.065f, 0), new Vector3(w - 2 * th, 0.01f, d - 2 * th));
-            Art3D.Part(PrimitiveType.Cube, kit.water, transform, new Vector3(0, Water, 0.01f), new Vector3(w - 2 * th, 0.004f, d - 2 * th), null, "Water");
-            // reeds at the back corners, lily pads on the water
-            var r = new System.Random(9);
-            foreach (float cx in new[] { -0.62f, 0.6f })
-                for (int i = 0; i < 4; i++)
-                {
-                    float x = cx + (float)(r.NextDouble() - 0.5) * 0.12f, z = -0.24f + (float)r.NextDouble() * 0.08f, hh = 0.35f + (float)r.NextDouble() * 0.3f;
-                    var reed = Art3D.Part(PrimitiveType.Cylinder, kit.green, transform, new Vector3(x, Water + hh / 2, z), new Vector3(0.012f, hh / 2, 0.012f), new Vector3((float)(r.NextDouble() - 0.5) * 12, 0, (float)(r.NextDouble() - 0.5) * 12));
-                    if (i % 2 == 0) Art3D.Part(PrimitiveType.Capsule, kit.brown, reed, new Vector3(0, 0.85f, 0), new Vector3(2.4f, 0.12f, 2.4f));
-                }
-            foreach (var (x, z, s) in new[] { (0.3f, 0.12f, 0.14f), (-0.4f, -0.1f, 0.11f), (0.45f, -0.15f, 0.09f) })
-                Art3D.Part(PrimitiveType.Cylinder, kit.green, transform, new Vector3(x, Water + 0.004f, z), new Vector3(s, 0.003f, s));
-            // fish swimming under the water: dark shapes going round
-            for (int i = 0; i < 3; i++)
-                _shadows.Add(Art3D.Part(PrimitiveType.Sphere, kit.dark, transform, new Vector3(0, Water - 0.12f - i * 0.05f, 0), new Vector3(0.05f, 0.025f, 0.13f)));
-            // the post, the rod on its pivot, the reel, the bell at its tip
-            Art3D.Part(PrimitiveType.Cylinder, kit.metal, transform, new Vector3(0.62f, 0.46f, 0.42f), new Vector3(0.04f, 0.46f, 0.04f));
-            _pivot = Art3D.Empty("RodPivot", transform, new Vector3(0.62f, 0.93f, 0.42f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.brown, _pivot, new Vector3(0, 0.65f, 0), new Vector3(0.024f, 0.65f, 0.024f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.dark, _pivot, new Vector3(0, -0.08f, 0), new Vector3(0.034f, 0.12f, 0.034f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.metal, _pivot, new Vector3(0.03f, 0.06f, 0), new Vector3(0.07f, 0.012f, 0.07f), new Vector3(0, 0, 90));
+            // the Blender model (Tools/Blender/odd.py, pond): the tub of water with reeds and lily pads, the post, the
+            // board behind; what moves is its own piece — the fish under the water, the rod, the hook, the float, the sand
+            var m = ModelLibrary.Spawn("Odd_pond", transform, kit)?.transform;
+            if (m == null) return;
+            for (int i = 0; i < 3; i++) _shadows.Add(Art3D.Pivot(m, "Shadow" + i, transform));
+            _pivot = Art3D.Pivot(m, "Rod", transform);
+            _pivot.name = "RodPivot";
             _tip = Art3D.Empty("Tip", _pivot, new Vector3(0, 1.3f, 0));
-            Art3D.Part(PrimitiveType.Sphere, kit.yellow, _tip, new Vector3(0, -0.03f, 0.015f), new Vector3(0.035f, 0.03f, 0.035f), null, "Bell");
-            _hook = Art3D.Empty("Hook", transform, Vector3.zero);
-            Art3D.Part(PrimitiveType.Cube, kit.metal, _hook, new Vector3(0, -0.006f, 0), new Vector3(0.004f, 0.012f, 0.004f));
-            _float = Art3D.Empty("Float", transform, Vector3.zero);
-            Art3D.Part(PrimitiveType.Sphere, kit.red, _float, new Vector3(0, 0.012f, 0), new Vector3(0.03f, 0.024f, 0.03f));
-            Art3D.Part(PrimitiveType.Sphere, kit.white, _float, new Vector3(0, -0.006f, 0), new Vector3(0.028f, 0.02f, 0.028f));
+            _hook = Art3D.Pivot(m, "Hook", transform);
+            _float = Art3D.Pivot(m, "Float", transform);
             _line = Art3D.Line("Line", transform, kit.line, 0.0025f);
             _line.positionCount = 3;
-            // the hourglass on the tub's front edge, by the post
-            var glass = Art3D.Empty("Hourglass", transform, new Vector3(0.42f, h, 0.36f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.brown, glass, new Vector3(0, 0.005f, 0), new Vector3(0.07f, 0.005f, 0.07f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.brown, glass, new Vector3(0, 0.125f, 0), new Vector3(0.07f, 0.005f, 0.07f));
-            Art3D.Part(PrimitiveType.Sphere, kit.clear, glass, new Vector3(0, 0.035f, 0), new Vector3(0.05f, 0.055f, 0.05f));
-            Art3D.Part(PrimitiveType.Sphere, kit.clear, glass, new Vector3(0, 0.095f, 0), new Vector3(0.05f, 0.055f, 0.05f));
-            _sandTop = Art3D.Part(PrimitiveType.Sphere, kit.yellow, glass, new Vector3(0, 0.09f, 0), new Vector3(0.04f, 0.04f, 0.04f));
-            _sandBottom = Art3D.Part(PrimitiveType.Sphere, kit.yellow, glass, new Vector3(0, 0.022f, 0), new Vector3(0.04f, 0.0f, 0.04f));
+            _sandTop = Art3D.Pivot(m, "SandTop", transform);
+            _sandBottom = Art3D.Pivot(m, "SandBottom", transform);
             Poster(kit);
             Grips();
         }
 
-        /// The board behind the tub: the fish that live in it, each with its name under it, and «кто клюёт» over them.
+        /// The board behind the tub (the model's): the fish that live in it, each with its name under it, and «кто клюёт»
+        /// over them.
         void Poster(PersonaKit kit)
         {
             const float z = -0.37f, y0 = 0.95f, bw = 1.46f, bh = 0.7f;
-            foreach (float x in new[] { -0.66f, 0.66f })
-                Art3D.Part(PrimitiveType.Cube, kit.brown, transform, new Vector3(x * 1.04f, (y0 + bh) / 2, z - 0.012f), new Vector3(0.04f, y0 + bh, 0.025f));
-            Art3D.Part(PrimitiveType.Cube, kit.grey, transform, new Vector3(0, y0 + bh / 2, z - 0.008f), new Vector3(bw, bh, 0.01f));
             var words = Art3D.Upright(transform, new Vector3(0, y0 + bh / 2, z), new Vector2(bw * 1000, bh * 1000));
             Art3D.Word(words, "Кто клюёт", new Vector2(0, bh * 500 - 70), 64, ChalkTex.White, 600);
             var names = Oddity.Options("fish");
@@ -262,8 +225,8 @@ namespace ChalkPhysics.Lab3D
             }
             // the hourglass: the sand runs while the bait is in the water
             float sand = _state == State.Waiting ? Mathf.Clamp01(_t / Sand) : _state == State.Casting ? 0 : 1;
-            _sandTop.localScale = new Vector3(0.04f, 0.04f * (1 - sand), 0.04f);
-            _sandBottom.localScale = new Vector3(0.04f, 0.035f * sand, 0.04f);
+            _sandTop.localScale = new Vector3(1, Mathf.Max(0.02f, 1 - sand), 1);
+            _sandBottom.localScale = new Vector3(1, Mathf.Max(0.02f, sand), 1);
         }
 
         System.Collections.IEnumerator Release(Transform fish)
@@ -293,86 +256,17 @@ namespace ChalkPhysics.Lab3D
         }
     }
 
-    /// The five fish of the pond, built of chalk shapes, head along +x: a striped perch, a round golden crucian, a long
-    /// pike, a dark whiskered catfish, a small spiky ruffe — each looks unlike the others at a glance. Everything on the
-    /// body (stripes, spots, fins, spines) is set on its surface: the body is an ellipsoid, and its height and thickness
-    /// at a point along it are known.
+    /// The five fish of the pond, Blender models (Tools/Blender/odd.py, fish), head along +x: a striped perch, a round
+    /// golden crucian, a long spotted pike, a dark whiskered catfish, a small spiky ruffe — each unlike the others at a
+    /// glance. On the board behind the tub and on the line.
     public static class FishArt
     {
+        static readonly string[] Kinds = { "perch", "crucian", "pike", "catfish", "ruffe" };
+
         public static void Build(int kind, Transform root, PersonaKit k, float scale)
         {
-            float len, tall, thick;
-            Material body;
-            switch (kind)
-            {
-                case 0: len = 0.2f; tall = 0.09f; body = k.green; break;    // perch
-                case 1: len = 0.17f; tall = 0.13f; body = k.yellow; break;  // crucian
-                case 2: len = 0.34f; tall = 0.06f; body = k.green; break;   // pike
-                case 3: len = 0.3f; tall = 0.1f; body = k.dark; break;      // catfish
-                default: len = 0.13f; tall = 0.07f; body = k.brown; break;  // ruffe
-            }
-            thick = tall * 0.55f;
-            // the body's half-height and half-thickness at x along it (an ellipsoid)
-            float F(float x) => Mathf.Sqrt(Mathf.Max(0, 1 - (2 * x / len) * (2 * x / len)));
-            float Up(float x) => tall / 2 * F(x);
-            float Side(float x) => thick / 2 * F(x);
-            Transform P(PrimitiveType t, Material m, Vector3 at, Vector3 size, float rz = 0) =>
-                Art3D.Part(t, m, root, at * scale, size * scale, new Vector3(0, 0, rz));
-            P(PrimitiveType.Sphere, body, Vector3.zero, new Vector3(len, tall, thick));
-            // the tail: two fins in a V from the body's end
-            float tailX = -len / 2 - tall * 0.12f;
-            P(PrimitiveType.Sphere, body, new Vector3(tailX, tall * 0.16f, 0), new Vector3(tall * 0.62f, tall * 0.2f, 0.01f), 40);
-            P(PrimitiveType.Sphere, body, new Vector3(tailX, -tall * 0.16f, 0), new Vector3(tall * 0.62f, tall * 0.2f, 0.01f), -40);
-            // the eyes, set into the head's sides
-            float ex = len * 0.3f, ey = tall * 0.12f, ez = Side(ex) * Mathf.Sqrt(Mathf.Max(0, 1 - (ey / Up(ex)) * (ey / Up(ex))));
-            float er = kind == 4 ? 0.028f : 0.02f;
-            foreach (float sz in new[] { -1f, 1f })
-            {
-                P(PrimitiveType.Sphere, k.white, new Vector3(ex, ey, sz * ez), new Vector3(er, er, er * 0.6f));
-                P(PrimitiveType.Sphere, k.dark, new Vector3(ex + 0.002f, ey, sz * (ez + er * 0.22f)), new Vector3(er * 0.5f, er * 0.5f, er * 0.3f));
-            }
-            switch (kind)
-            {
-                case 0:   // perch: dark bands round the body, red fins below, a spiny fin on the back
-                    for (int i = 0; i < 4; i++)
-                    {
-                        float x = -len * 0.25f + i * len * 0.13f;
-                        P(PrimitiveType.Sphere, k.dark, new Vector3(x, 0, 0), new Vector3(0.012f, tall * F(x) * 1.03f, thick * F(x) * 1.04f));
-                    }
-                    P(PrimitiveType.Sphere, k.red, new Vector3(0.0f, -Up(0) + 0.004f, 0), new Vector3(len * 0.22f, tall * 0.32f, 0.008f));
-                    P(PrimitiveType.Sphere, k.dark, new Vector3(-len * 0.02f, Up(0) - 0.004f, 0), new Vector3(len * 0.4f, tall * 0.45f, 0.008f));
-                    break;
-                case 1:   // crucian: round and golden, orange fins on the back and below
-                    P(PrimitiveType.Sphere, k.orange, new Vector3(-len * 0.05f, Up(0) - 0.005f, 0), new Vector3(len * 0.45f, tall * 0.3f, 0.008f));
-                    P(PrimitiveType.Sphere, k.orange, new Vector3(-len * 0.1f, -Up(0) + 0.005f, 0), new Vector3(len * 0.25f, tall * 0.22f, 0.008f));
-                    break;
-                case 2:   // pike: a long flat snout, yellow spots on the sides, its back fin far back
-                    P(PrimitiveType.Sphere, body, new Vector3(len * 0.47f, -tall * 0.05f, 0), new Vector3(len * 0.3f, tall * 0.42f, thick * 0.6f));
-                    for (int i = 0; i < 6; i++)
-                    {
-                        float x = -len * 0.3f + i * len * 0.11f, y = (i % 2 - 0.5f) * tall * 0.3f;
-                        float z = Side(x) * Mathf.Sqrt(Mathf.Max(0, 1 - (y / Mathf.Max(0.001f, Up(x))) * (y / Mathf.Max(0.001f, Up(x)))));
-                        foreach (float sz in new[] { -1f, 1f }) P(PrimitiveType.Sphere, k.yellow, new Vector3(x, y, sz * z), new Vector3(0.016f, 0.012f, 0.006f));
-                    }
-                    P(PrimitiveType.Sphere, body, new Vector3(-len * 0.33f, Up(-len * 0.33f) - 0.002f, 0), new Vector3(len * 0.16f, tall * 0.5f, 0.008f));
-                    break;
-                case 3:   // catfish: a wide flat head, long whiskers from the mouth
-                    P(PrimitiveType.Sphere, body, new Vector3(len * 0.3f, -tall * 0.05f, 0), new Vector3(len * 0.4f, tall * 0.85f, thick * 1.5f));
-                    foreach (float sz in new[] { -1f, 1f })
-                    {
-                        var w = Art3D.Part(PrimitiveType.Cube, k.dark, root, new Vector3(len * 0.62f, -tall * 0.18f, sz * thick * 0.45f) * scale, new Vector3(len * 0.42f, 0.004f, 0.004f) * scale);
-                        w.localRotation = Quaternion.Euler(0, sz * -25, -20);
-                    }
-                    break;
-                default:  // ruffe: a big spiny fin all along its back, big eyes
-                    P(PrimitiveType.Sphere, k.dark, new Vector3(-len * 0.02f, Up(0) - 0.003f, 0), new Vector3(len * 0.7f, tall * 0.85f, 0.008f));
-                    for (int i = 0; i < 6; i++)
-                    {   // the spines stand out of the body through the fin, their feet inside the back
-                        float x = -len * 0.25f + i * len * 0.1f;
-                        P(PrimitiveType.Cube, k.dark, new Vector3(x, Up(x) + tall * 0.15f, 0), new Vector3(0.004f, tall * 0.55f, 0.004f), -10 + i * 4);
-                    }
-                    break;
-            }
+            var go = ModelLibrary.Spawn("Odd_fish_" + Kinds[Mathf.Clamp(kind, 0, Kinds.Length - 1)], root, k);
+            if (go != null) go.transform.localScale = Vector3.one * scale;
         }
     }
 }

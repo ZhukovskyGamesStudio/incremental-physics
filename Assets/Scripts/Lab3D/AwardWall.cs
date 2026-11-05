@@ -388,9 +388,8 @@ namespace ChalkPhysics.Lab3D
                 float sx = i == 0 ? -1 : 1;
                 var h = new GameObject("CertHand").transform;
                 h.SetParent(c.transform, false);
-                Art3D.Part(PrimitiveType.Sphere, kit.skin, h, new Vector3(sx * 0.18f, -0.06f, -0.012f), new Vector3(0.03f, 0.09f, 0.075f));
-                Art3D.Part(PrimitiveType.Capsule, kit.skin, h, new Vector3(sx * 0.158f, -0.04f, 0.01f), new Vector3(0.018f, 0.025f, 0.018f), new Vector3(0, 0, sx * 30));
-                Art3D.Part(PrimitiveType.Cylinder, kit.white, h, new Vector3(sx * 0.2f, -0.12f, -0.09f), new Vector3(0.065f, 0.075f, 0.065f), new Vector3(60, 0, sx * 12));
+                var m = ModelLibrary.Spawn("Body_hand_cert", h, kit);   // a hand at its side (Tools/Blender/body.py); the left one mirrored
+                if (m != null) m.transform.localScale = new Vector3(sx, 1, 1);
                 foreach (var x in h.GetComponentsInChildren<Transform>(true)) x.gameObject.layer = Lab3DGame.ViewLayer;
                 _hands[i] = h;
             }

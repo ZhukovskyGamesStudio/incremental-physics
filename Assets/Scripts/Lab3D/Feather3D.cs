@@ -26,54 +26,13 @@ namespace ChalkPhysics.Lab3D
 
         protected override void Build(PersonaKit kit)
         {
-            Art3D.Part(PrimitiveType.Cylinder, kit.purple, transform, new Vector3(0, 0.02f, 0.06f), new Vector3(0.26f, 0.02f, 0.26f));
-            foreach (float a in new[] { 0f, 90f, 180f, 270f })   // tassels at its edge
-                Art3D.Part(PrimitiveType.Sphere, kit.yellow, transform, new Vector3(Mathf.Cos(a * Mathf.Deg2Rad) * 0.13f, 0.02f, 0.06f + Mathf.Sin(a * Mathf.Deg2Rad) * 0.13f), Vector3.one * 0.022f);
-            seat = Art3D.Empty("Seat", transform, new Vector3(0, 0.04f, 0.06f));
-            // the feather lies on the table beside the cushion
-            _feather = Art3D.Empty("Feather", transform, RestPos, null);
-            _feather.localRotation = RestRot;
-            Quill(kit);
+            // the Blender model (Tools/Blender/odd.py, feather): the velvet cushion with its tassels, and the white
+            // feather — a curving shaft, fluff, the vane in strips combed into barbs — lying on the table beside it
+            var m = ModelLibrary.Spawn("Odd_feather", transform, kit)?.transform;
+            if (m == null) return;
+            seat = Art3D.Pivot(m, "Seat", transform);
+            _feather = Art3D.Pivot(m, "Feather", transform, RestRot);   // hangs along its -y, its point at the bottom
             Art3D.Grip("Grip", transform, new Vector3(0, 0.1f, 0.06f), new Vector3(0.3f, 0.2f, 0.3f));
-        }
-
-        /// A white quill hanging from the arm: a bare tip of the shaft at the top, a little fluff, then the vane — barbs
-        /// on both sides of the gently curving shaft, swept towards its point, widest a third of the way down — and the
-        /// shaft's point at the bottom, which does the tickling.
-        void Quill(PersonaKit kit)
-        {
-            const float L = 0.32f;
-            Vector3 At(float t) => new Vector3(Mathf.Sin(t * 1.4f) * 0.035f, -t * L, 0);
-            const int n = 16;
-            for (int i = 0; i < n; i++)
-            {   // the shaft, in short pieces along its curve, thinner to the point
-                float t0 = i / (float)n, t1 = (i + 1) / (float)n;
-                var a = At(t0);
-                var b = At(t1);
-                float w = Mathf.Lerp(0.006f, 0.0025f, t0);
-                var seg = Art3D.Part(PrimitiveType.Cylinder, kit.white, _feather, (a + b) / 2, new Vector3(w, (b - a).magnitude / 2, w));
-                seg.localRotation = Quaternion.FromToRotation(Vector3.up, b - a);
-            }
-            for (int i = 0; i < 4; i++)   // a little fluff at the bottom of the vane's start
-            {
-                float t = 0.1f + i * 0.025f;
-                foreach (float s in new[] { -1f, 1f })
-                    Art3D.Part(PrimitiveType.Sphere, kit.white, _feather, At(t) + new Vector3(s * 0.012f, 0, 0), new Vector3(0.018f, 0.012f, 0.008f), new Vector3(0, 0, s * 30));
-            }
-            for (int i = 0; i <= 30; i++)
-            {   // the barbs, swept down towards the point
-                float t = 0.2f + i / 30f * 0.76f;
-                float u = (t - 0.2f) / 0.76f;
-                float w = 0.05f * Mathf.Sin(Mathf.PI * Mathf.Pow(u, 0.6f)) + 0.006f;
-                var p = At(t);
-                var tangent = (At(t + 0.01f) - p).normalized;
-                foreach (float s in new[] { -1f, 1f })
-                {
-                    var side = Quaternion.Euler(0, 0, s * 55) * tangent;   // out to the side, sloping down the shaft
-                    var barb = Art3D.Part(PrimitiveType.Cube, kit.white, _feather, p + side.normalized * (w * 0.5f), new Vector3(w, 0.0022f, 0.0022f));
-                    barb.localRotation = Quaternion.FromToRotation(Vector3.right, side.normalized);
-                }
-            }
         }
 
         protected override void OnPut(Sample3D s) { Giggled = false; _tickled = 0; }

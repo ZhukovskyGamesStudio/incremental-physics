@@ -25,40 +25,22 @@ namespace ChalkPhysics.Lab3D
 
         protected override void Build(PersonaKit kit)
         {
-            Art3D.Part(PrimitiveType.Cylinder, kit.red, transform, new Vector3(0.08f, 0.03f, -0.08f), new Vector3(0.46f, 0.03f, 0.4f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.white, transform, new Vector3(-0.05f, 0.006f, 0.24f), new Vector3(0.2f, 0.006f, 0.2f));
-            Art3D.Part(PrimitiveType.Cylinder, kit.white, transform, new Vector3(-0.05f, 0.014f, 0.24f), new Vector3(0.24f, 0.003f, 0.24f));
-            seat = Art3D.Empty("Seat", transform, new Vector3(-0.05f, 0.016f, 0.24f));
+            // the Blender model (Tools/Blender/odd.py, cat): the cushion and the saucer stay, the cat's pieces move
+            var m = ModelLibrary.Spawn("Odd_cat", transform, kit)?.transform;
+            if (m == null) return;
+            seat = Art3D.Pivot(m, "Seat", transform);
             _cat = Art3D.Empty("Cat", transform, new Vector3(0.08f, 0.06f, -0.08f), new Vector3(0, -20, 0));
-            _body = Art3D.Empty("Body", _cat, Vector3.zero);
-            Art3D.Part(PrimitiveType.Sphere, kit.orange, _body, new Vector3(0, 0.09f, -0.02f), new Vector3(0.24f, 0.18f, 0.36f));
-            Art3D.Part(PrimitiveType.Sphere, kit.white, _body, new Vector3(0, 0.08f, 0.13f), new Vector3(0.15f, 0.12f, 0.12f));
-            for (int i = 0; i < 3; i++)
-            {   // ginger stripes round the back: bands a hair bigger than the body where they are
-                float dz = -0.1f + i * 0.07f, f = Mathf.Sqrt(Mathf.Max(0, 1 - (2 * (dz + 0.02f) / 0.36f) * (2 * (dz + 0.02f) / 0.36f)));
-                Art3D.Part(PrimitiveType.Sphere, kit.brown, _body, new Vector3(0, 0.09f + 0.004f, dz), new Vector3(0.24f * f * 1.03f, 0.18f * f * 1.03f, 0.022f));
-            }
-            _spikes = Art3D.Empty("Spikes", _body, Vector3.zero);
-            for (int i = 0; i < 7; i++)
-                Art3D.Part(PrimitiveType.Cube, kit.orange, _spikes, new Vector3(0, 0.19f, -0.15f + i * 0.045f), new Vector3(0.006f, 0.05f, 0.006f), new Vector3(Random.Range(-20f, 20f), 0, Random.Range(-15f, 15f)));
+            _body = Art3D.Pivot(m, "Body", _cat);
+            _spikes = Art3D.Pivot(m, "Spikes", _body);   // the fur up along the back: only when it hisses
             _spikes.gameObject.SetActive(false);
-            foreach (float sx in new[] { -1f, 1f })
-                Art3D.Part(PrimitiveType.Sphere, kit.orange, _body, new Vector3(sx * 0.07f, 0.03f, 0.17f), new Vector3(0.06f, 0.04f, 0.08f));
-            _paw = Art3D.Part(PrimitiveType.Sphere, kit.white, _body, new Vector3(-0.05f, 0.03f, 0.21f), new Vector3(0.055f, 0.04f, 0.07f));
-            _tail = Art3D.Empty("Tail", _body, new Vector3(0.02f, 0.06f, -0.19f));
-            for (int i = 0; i < 4; i++)
-                Art3D.Part(PrimitiveType.Sphere, i == 3 ? kit.white : kit.orange, _tail, new Vector3(0.04f * i, 0, -0.04f * i + 0.008f * i * i), new Vector3(0.05f, 0.05f, 0.07f));
-            _head = Art3D.Empty("Head", _body, new Vector3(0, 0.14f, 0.17f));
-            Art3D.Part(PrimitiveType.Sphere, kit.orange, _head, Vector3.zero, new Vector3(0.16f, 0.14f, 0.14f));
-            Art3D.Part(PrimitiveType.Sphere, kit.white, _head, new Vector3(0, -0.025f, 0.05f), new Vector3(0.08f, 0.06f, 0.05f));
-            Art3D.Part(PrimitiveType.Sphere, kit.pink, _head, new Vector3(0, -0.005f, 0.072f), new Vector3(0.02f, 0.015f, 0.012f));
+            _paw = Art3D.Pivot(m, "Paw", _body);          // the left front paw: it bats
+            _tail = Art3D.Pivot(m, "Tail", _body);
+            _head = Art3D.Pivot(m, "Head", _body);
             for (int i = 0; i < 2; i++)
             {
-                float sx = i == 0 ? -1 : 1;
-                _ears[i] = Art3D.Part(PrimitiveType.Cube, kit.orange, _head, new Vector3(sx * 0.045f, 0.065f, -0.005f), new Vector3(0.045f, 0.045f, 0.015f), new Vector3(0, 0, 45));
-                _eyes[i] = Art3D.Part(PrimitiveType.Sphere, kit.dark, _head, new Vector3(sx * 0.033f, 0.018f, 0.062f), new Vector3(0.026f, 0.003f, 0.012f));
-                for (int w = 0; w < 2; w++)
-                    Art3D.Part(PrimitiveType.Cube, kit.white, _head, new Vector3(sx * 0.06f, -0.02f - w * 0.012f, 0.06f), new Vector3(0.07f, 0.002f, 0.002f), new Vector3(0, sx * 15, sx * (w == 0 ? 8 : -8)));
+                string side = i == 0 ? "L" : "R";
+                _ears[i] = Art3D.Pivot(m, "Ear" + side, _head);
+                _eyes[i] = Art3D.Pivot(m, "Eye" + side, _head);
             }
             Art3D.Grip("Grip", transform, new Vector3(0.02f, 0.12f, 0.05f), new Vector3(0.5f, 0.24f, 0.62f));
             Pose(0, 0, 0);
@@ -79,11 +61,11 @@ namespace ChalkPhysics.Lab3D
         {
             _head.localPosition = new Vector3(0, Mathf.Lerp(0.1f, 0.17f, awake), Mathf.Lerp(0.18f, 0.2f, awake));
             _head.localRotation = Quaternion.Euler(Mathf.Lerp(18, -5, awake), Mathf.Lerp(-10, 0, awake), 0);
-            foreach (var e in _eyes) e.localScale = new Vector3(0.026f, Mathf.Lerp(0.003f, 0.03f, eyes), 0.012f);
+            foreach (var e in _eyes) e.localScale = new Vector3(1, Mathf.LerpUnclamped(0.12f, 1, eyes), 1);
             _body.localScale = new Vector3(1 - 0.12f * arch, 1 + 0.4f * arch, 1 - 0.08f * arch);
             _spikes.gameObject.SetActive(arch > 0.5f);
-            _tail.localRotation = Quaternion.Euler(-70 * arch, 0, 0);
-            for (int i = 0; i < 2; i++) _ears[i].localRotation = Quaternion.Euler(-50 * arch, 0, 45);
+            _tail.localRotation = Quaternion.Euler(0, 0, 80 * arch);   // up from the rump
+            for (int i = 0; i < 2; i++) _ears[i].localRotation = Quaternion.Euler(-50 * arch, 0, 0);   // laid back
         }
 
         void Update()

@@ -120,87 +120,81 @@ namespace ChalkPhysics.EditorTools
             c.size = size;
         }
 
-        /// Where a pipe meets the ceiling: a round flange with a collar and four bolts, so it hangs from something.
-        static void Mount(Transform parent, Vector3 at, float ceiling, float width, Material metal)
+        /// A Blender model of the desk or the room (Tools/Blender/desk.py: Models/Desk/<name>.fbx) under `parent`, at
+        /// `at`: painted with the kit's chalk by the colour in each part's name ("Block.brown"), or with `by`'s material
+        /// where a key of it begins the part's name or is its colour ("Paper" — the bare paper the writing goes on,
+        /// "brown" — the lab's wood). A plain copy, not a prefab instance: its pieces get pivots (Art3D.Pivot).
+        static Transform Model(string name, Transform parent, Vector3 at, PersonaKit kit, Dictionary<string, Material> by = null)
         {
-            Part(PrimitiveType.Cylinder, "CeilingFlange", parent, new Vector3(at.x, ceiling - 0.012f, at.z), new Vector3(width, 0.012f, width), metal);
-            Part(PrimitiveType.Cylinder, "CeilingCollar", parent, new Vector3(at.x, ceiling - 0.05f, at.z), new Vector3(width * 0.7f, 0.03f, width * 0.7f), metal);
-            for (int i = 0; i < 4; i++)
-            {
-                float a = i * Mathf.PI / 2 + Mathf.PI / 4, r = width * 0.4f;
-                Part(PrimitiveType.Cylinder, "Bolt", parent, new Vector3(at.x + Mathf.Cos(a) * r, ceiling - 0.03f, at.z + Mathf.Sin(a) * r), new Vector3(0.025f, 0.008f, 0.025f), metal);
-            }
+            var src = AssetDatabase.LoadAssetAtPath<GameObject>($"{Models}/Desk/{name}.fbx");
+            var go = Object.Instantiate(src, parent, false);
+            go.name = name;
+            go.transform.localPosition = at;
+            go.transform.localRotation = Quaternion.identity;
+            kit.Paint(go);
+            if (by != null)
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                {
+                    var parts = r.name.Split('.');
+                    foreach (var kv in by)
+                        if (parts[0].StartsWith(kv.Key) || (parts.Length > 1 && parts[1] == kv.Key)) { r.sharedMaterial = kv.Value; break; }
+                }
+            return go.transform;
         }
 
-        /// The order desk's bureaucracy (DESIGN.md 2б, «Труба приёмки»): at the counter's left end a rubber stamp on its
-        /// ink pad; at the right end the dispatch box under a pipe that goes up through the ceiling, and a big button.
-        static void BuildDesk(Transform counter, Lab3DGame game, Material wood, Material metal, Material spring)
+        /// The order desk's bureaucracy (DESIGN.md 2б, «Труба приёмки», «Посылка заказчику»): at the counter's left end a
+        /// rubber stamp on its ink pad; at the right end the dispatch box with its two flaps and the tape that goes over
+        /// them. Blender models (Tools/Blender/desk.py).
+        static void BuildDesk(Transform counter, Lab3DGame game, PersonaKit kit, Material wood, Material metal)
         {
-            var red = Mat("ButtonRed", new Color(1f, 0.45f, 0.42f), 1.2f, 140, 0.75f, 0.2f);
             var pad = Mat("InkPad", new Color(1f, 0.5f, 0.5f), 0.5f, 90, 0.2f, 0.3f);
             float top = TableTop;
 
-            var inkPad = Part(PrimitiveType.Cube, "InkPad", counter, new Vector3(-0.66f, top + 0.006f, -0.12f), new Vector3(0.12f, 0.012f, 0.085f), pad);
-            Grip(inkPad, new Vector3(0, 3, 0), new Vector3(1.2f, 7, 1.3f));   // a click on the pad puts the stamp back
+            var inkPad = new GameObject("InkPad").transform;
+            inkPad.SetParent(counter, false);
+            inkPad.localPosition = new Vector3(-0.66f, top, -0.12f);
+            Model("Desk_inkpad", inkPad, Vector3.zero, kit, new Dictionary<string, Material> { ["Pad"] = pad, ["metal"] = metal });
+            Grip(inkPad.gameObject, new Vector3(0, 0.042f, 0), new Vector3(0.144f, 0.084f, 0.11f));   // a click on the pad puts the stamp back
             var stamp = new GameObject("Stamp").transform;
             stamp.SetParent(counter, false);
             stamp.localPosition = new Vector3(-0.66f, top + 0.012f, -0.12f);
-            Part(PrimitiveType.Cube, "Base", stamp, new Vector3(0, 0.012f, 0), new Vector3(0.075f, 0.024f, 0.05f), wood);
-            Part(PrimitiveType.Cube, "Rubber", stamp, new Vector3(0, 0.002f, 0), new Vector3(0.068f, 0.004f, 0.044f), red);
-            Part(PrimitiveType.Cylinder, "Handle", stamp, new Vector3(0, 0.06f, 0), new Vector3(0.026f, 0.036f, 0.026f), wood);
-            Part(PrimitiveType.Sphere, "Knob", stamp, new Vector3(0, 0.105f, 0), new Vector3(0.045f, 0.04f, 0.045f), wood);
+            Model("Desk_stamp", stamp, Vector3.zero, kit, new Dictionary<string, Material> { ["brown"] = wood, ["metal"] = metal });
             Grip(stamp.gameObject, new Vector3(0, 0.065f, 0), new Vector3(0.09f, 0.13f, 0.07f));
 
             var box = new GameObject("DispatchBox").transform;
             box.SetParent(counter, false);
             box.localPosition = new Vector3(0.66f, top, 0.05f);
-            Part(PrimitiveType.Cube, "Bottom", box, new Vector3(0, 0.005f, 0), new Vector3(0.27f, 0.01f, 0.34f), wood);
             const float wallH = 0.2f;   // tall enough for a ball of 2.8 l; a bottle goes in lying down
-            Part(PrimitiveType.Cube, "Front", box, new Vector3(0, 0.005f + wallH / 2, -0.165f), new Vector3(0.27f, wallH, 0.01f), wood);
-            Part(PrimitiveType.Cube, "Back", box, new Vector3(0, 0.005f + wallH / 2, 0.165f), new Vector3(0.27f, wallH, 0.01f), wood);
-            Part(PrimitiveType.Cube, "Left", box, new Vector3(-0.13f, 0.005f + wallH / 2, 0), new Vector3(0.01f, wallH, 0.34f), wood);
-            Part(PrimitiveType.Cube, "Right", box, new Vector3(0.13f, 0.005f + wallH / 2, 0), new Vector3(0.01f, wallH, 0.34f), wood);
+            var tapeMat = Mat("Tape", new Color(0.95f, 0.85f, 0.6f), 1.2f, 160, -0.4f, 0.2f);
+            var boxModel = Model("Desk_box", box, Vector3.zero, kit, new Dictionary<string, Material> { ["Tape"] = tapeMat, ["brown"] = wood });
             // the lid: two flaps hinged on the side walls, standing open outwards; packing folds them shut one after the other
             var lid = new GameObject("Lid").transform;
             lid.SetParent(box, false);
             lid.localPosition = new Vector3(0, 0.005f + wallH, 0);
             foreach (var (name, x) in new[] { ("FlapL", -0.135f), ("FlapR", 0.135f) })
             {
-                var flap = new GameObject(name).transform;
-                flap.SetParent(lid, false);
-                flap.localPosition = new Vector3(x, 0, 0);
-                Part(PrimitiveType.Cube, "Board", flap, new Vector3(-x / 2, 0.004f, 0), new Vector3(0.134f, 0.008f, 0.34f), wood);
+                var flap = Art3D.Pivot(boxModel, name, lid);
                 flap.localRotation = Quaternion.Euler(0, 0, x < 0 ? 115 : -115);
             }
             var inside = new GameObject("Inside").transform;
             inside.SetParent(box, false);
             inside.localPosition = new Vector3(0, 0.011f, 0);
             Grip(box.gameObject, new Vector3(0, 0.105f, 0), new Vector3(0.28f, 0.22f, 0.35f));
-
             // (no pipe and no button: the packed box goes back to its customer by hand, DESIGN.md 2б, «Посылка заказчику»)
-            float ceiling = 3.0f;
-            // a strip of tape over the shut lid and down the front: shown once the box is packed
-            var tape = new GameObject("Tape").transform;
-            tape.SetParent(box, false);
-            var tapeMat = Mat("Tape", new Color(0.95f, 0.85f, 0.6f), 1.2f, 160, -0.4f, 0.2f);
-            Part(PrimitiveType.Cube, "TapeTop", tape, new Vector3(0, 0.215f, 0), new Vector3(0.06f, 0.003f, 0.35f), tapeMat);
-            Part(PrimitiveType.Cube, "TapeFront", tape, new Vector3(0, 0.17f, -0.172f), new Vector3(0.06f, 0.085f, 0.003f), tapeMat);
-            game.boxTape = tape;
-            // (no pipe for the orders: the customers bring them, DESIGN.md 2б, «Клиенты»)
-
+            // the strip of tape over the shut lid and down the front: shown once the box is packed
+            game.boxTape = Art3D.Pivot(boxModel, "Tape", box);
 
             game.stamp = stamp;
-            game.calculator = BuildCalculator(counter.parent, wood);
-            game.stampPad = inkPad.transform;
+            game.calculator = BuildCalculator(counter.parent, kit);
+            game.stampPad = inkPad;
             game.dispatchBox = box;
             game.boxLid = lid;
             game.boxInside = inside;
-
         }
 
         /// The calculator on the weighing table, by the counter: comes with the density. Keys in four rows of four, pressed
         /// with the dot; the labels and the display are written at runtime (Calculator3D).
-        static GameObject BuildCalculator(Transform lab, Material wood)
+        static GameObject BuildCalculator(Transform lab, PersonaKit kit)
         {
             var body = Mat("CalcBody", new Color(0.7f, 0.78f, 0.85f), 0, 40, 0.75f, 0);
             var keyMat = Mat("CalcKey", new Color(0.93f, 0.93f, 0.89f), 0, 40, 0.75f, 0);   // no strokes over the labels
@@ -210,23 +204,18 @@ namespace ChalkPhysics.EditorTools
             root.transform.localPosition = new Vector3(0.9f, TableTop + 0.02f, 2.88f);
             root.transform.localRotation = Quaternion.Euler(-14, 0, 0);   // tipped up towards the one who stands at it
             var t = root.transform;
-            Part(PrimitiveType.Cube, "Body", t, new Vector3(0, 0.01f, 0), new Vector3(0.17f, 0.02f, 0.25f), body);
-            Part(PrimitiveType.Cube, "Prop", t, new Vector3(0, -0.012f, 0.09f), new Vector3(0.15f, 0.03f, 0.03f), body);
-            var display = Part(PrimitiveType.Cube, "Display", t, new Vector3(0, 0.0215f, 0.085f), new Vector3(0.15f, 0.003f, 0.05f), screen);
+            var m = Model("Desk_calculator", t, Vector3.zero, kit, new Dictionary<string, Material> { ["Key"] = keyMat, ["Display"] = screen, ["Body"] = body });
+            var display = Art3D.Pivot(m, "Display", t);
             string[] keys = { "7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", "C", "0", ",", "=", "tg" };
             for (int i = 0; i < keys.Length; i++)
             {
-                int c = i % 4, r = i / 4;
-                var k = GameObject.CreatePrimitive(PrimitiveType.Cube);   // with its collider: pressed with the dot
+                var k = Art3D.Pivot(m, $"Key{i:00}", t);   // with its collider: pressed with the dot
                 k.name = "Key " + keys[i];
-                k.transform.SetParent(t, false);
-                k.transform.localPosition = new Vector3(-0.054f + 0.036f * c, 0.024f, 0.035f - 0.036f * r);
-                k.transform.localScale = new Vector3(0.031f, 0.008f, 0.029f);
-                k.GetComponent<MeshRenderer>().sharedMaterial = keyMat;
-                k.AddComponent<CalcKey>().key = keys[i];
+                k.gameObject.AddComponent<BoxCollider>().size = new Vector3(0.031f, 0.008f, 0.029f);
+                k.gameObject.AddComponent<CalcKey>().key = keys[i];
             }
             var calc = root.AddComponent<Calculator3D>();
-            calc.display = display.transform;
+            calc.display = display;
             return root;
         }
 
@@ -390,6 +379,27 @@ namespace ChalkPhysics.EditorTools
             var light = Mat("SampleLight", White, 0.35f, 150, 0.75f, 0.1f);
             var mid = Mat("SampleMid", White, 0.7f, 150, 0.75f, 0.2f);
             var dense = Mat("SampleDense", White, 1.15f, 150, 0.75f, 0.35f);
+            // the kit's chalk colours: the customers and the Blender models made at runtime are painted with them, and the
+            // desk's and the room's models put in here (Model)
+            var kit = new PersonaKit
+            {
+                skin = Mat("PSkin", new Color(1f, 0.82f, 0.68f), 0.95f, 70, 0.75f, 0.2f),
+                dark = Mat("PDark", new Color(0.35f, 0.33f, 0.32f), 0.6f, 120, 0.4f, 0.2f),
+                white = Mat("PWhite", White, 0.9f, 70, 0.9f, 0.2f),
+                red = Mat("PRed", new Color(1f, 0.5f, 0.45f), 0.95f, 70, 0.6f, 0.2f),
+                blue = Mat("PBlue", new Color(0.55f, 0.7f, 1f), 0.95f, 70, -0.6f, 0.2f),
+                green = Mat("PGreen", new Color(0.55f, 0.9f, 0.6f), 0.95f, 70, 0.3f, 0.2f),
+                yellow = Mat("PYellow", new Color(1f, 0.9f, 0.45f), 0.95f, 70, 1.1f, 0.2f),
+                brown = Mat("PBrown", new Color(0.85f, 0.62f, 0.42f), 0.95f, 70, -0.3f, 0.2f),
+                grey = Mat("PGrey", new Color(0.75f, 0.75f, 0.75f), 0.9f, 70, 0.75f, 0.2f),
+                orange = Mat("POrange", new Color(1f, 0.65f, 0.35f), 0.95f, 70, -1f, 0.2f),
+                purple = Mat("PPurple", new Color(0.82f, 0.62f, 1f), 0.95f, 70, 0.2f, 0.2f),
+                metal = metal,
+                clear = Clear("PGlass", new Color(0.75f, 0.9f, 1f, 0.22f)),
+                pink = Mat("PPink", new Color(1f, 0.62f, 0.72f), 1.0f, 80, 0.5f, 0.25f),
+                water = Clear("PondWater", new Color(0.4f, 0.68f, 0.92f, 0.28f)),
+                line = Plain("FishingLine", new Color(0.93f, 0.93f, 0.89f)),
+            };
 
             var lab = new GameObject("Lab").transform;
 
@@ -428,14 +438,14 @@ namespace ChalkPhysics.EditorTools
                 float J() => (float)(r.NextDouble() * 2 - 1);
                 void CardBox(Vector3 at, Vector3 size, float yaw)
                 {
-                    var b = GameObject.CreatePrimitive(PrimitiveType.Cube);   // with its collider: it is in the way, things go on it
-                    b.name = "Cardboard box";
+                    var b = new GameObject("Cardboard box");
                     b.transform.SetParent(corner, false);
-                    b.transform.localPosition = at + Vector3.up * size.y / 2;
+                    b.transform.localPosition = at;
                     b.transform.localRotation = Quaternion.Euler(0, yaw, 0);
-                    b.transform.localScale = size;
-                    b.GetComponent<MeshRenderer>().sharedMaterial = cardboard;
-                    Part(PrimitiveType.Cube, "Tape", b.transform, new Vector3(0, 0.5f, 0), new Vector3(0.18f, 0.02f, 1.01f), tape);
+                    Model("Desk_cardbox", b.transform, Vector3.zero, kit, new Dictionary<string, Material> { ["Box"] = cardboard, ["Tape"] = tape }).localScale = size;
+                    var col = b.AddComponent<BoxCollider>();   // it is in the way, things go on it
+                    col.center = new Vector3(0, size.y / 2, 0);
+                    col.size = size;
                 }
                 CardBox(new Vector3(dx * 0.32f, 0, dz * 0.28f), new Vector3(0.56f, 0.42f, 0.46f), 8 + 6 * J());
                 CardBox(new Vector3(dx * 0.3f + 0.03f * J(), 0.42f, dz * 0.27f), new Vector3(0.42f, 0.32f, 0.38f), -14 + 8 * J());
@@ -443,34 +453,14 @@ namespace ChalkPhysics.EditorTools
                 CardBox(new Vector3(dx * 0.82f, 0, dz * 0.25f), new Vector3(0.36f, 0.3f, 0.34f), 25 + 10 * J());
                 if (deep) CardBox(new Vector3(dx * 0.3f, 0, dz * 0.74f), new Vector3(0.4f, 0.26f, 0.32f), -30 + 10 * J());
             }
-            // a cobweb strung across an upper corner: threads from its middle to the two walls and down the corner, and
-            // rings round them; `u`/`v` run along the two walls from the corner
+            // a cobweb strung across an upper corner (a Blender model a metre across), `u`/`v` along the two walls from the
+            // corner: turned so that the model's walls (+x, +z) lie along them (it is the same either way round)
             void Cobweb(Transform corner, Vector3 u, Vector3 v, float size)
             {
-                var c = new Vector3(0, 3.0f, 0);
-                var pts = new[] { c + u * size, c + (u + v) * size * 0.45f + Vector3.down * size * 0.35f, c + v * size, c + (v + Vector3.down) * size * 0.5f, c + Vector3.down * size, c + (u + Vector3.down) * size * 0.5f };
-                var mid = (pts[0] + pts[2] + pts[4]) / 3;
-                void Thread(Vector3 a, Vector3 b)
-                {
-                    var th = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    Object.DestroyImmediate(th.GetComponent<Collider>());
-                    th.name = "Thread";
-                    th.transform.SetParent(corner, false);
-                    th.transform.localPosition = (a + b) / 2;
-                    th.transform.localRotation = Quaternion.FromToRotation(Vector3.up, b - a);
-                    th.transform.localScale = new Vector3(0.003f, (b - a).magnitude / 2, 0.003f);
-                    th.GetComponent<MeshRenderer>().sharedMaterial = web;
-                }
-                foreach (var p in pts) Thread(mid, p);
-                Thread(pts[0], c);
-                Thread(pts[2], c);
-                Thread(pts[4], c);
-                for (int k = 1; k <= 4; k++)
-                    for (int i = 0; i < pts.Length; i++)
-                    {
-                        float f = k / 5f;
-                        Thread(Vector3.Lerp(mid, pts[i], f), Vector3.Lerp(mid, pts[(i + 1) % pts.Length], f));
-                    }
+                var along = Vector3.Cross(Vector3.up, v) == u ? v : u;
+                var t = Model("Desk_cobweb", corner, new Vector3(0, 3.0f, 0), kit, new Dictionary<string, Material> { ["Web"] = web });
+                t.localRotation = Quaternion.LookRotation(along, Vector3.up);
+                t.localScale = Vector3.one * size;
             }
             Pile(cornerFL, 1, 1, 3, true);
             Pile(cornerFR, -1, 1, 7, false);   // not up to the door
@@ -480,11 +470,7 @@ namespace ChalkPhysics.EditorTools
             Cobweb(cornerBR, Vector3.left, Vector3.back, 0.3f);
             // a bare bulb on a cord over the closet
             var bulbMat = Mat("Bulb", new Color(1f, 0.95f, 0.75f), 1.7f, 180, 0.75f, 0.2f);
-            Part(PrimitiveType.Cylinder, "Cord", lab, new Vector3(1.2f, 2.75f, 2.25f), new Vector3(0.008f, 0.25f, 0.008f), wall);
-            Part(PrimitiveType.Cylinder, "CeilingRose", lab, new Vector3(1.2f, 2.985f, 2.25f), new Vector3(0.11f, 0.015f, 0.11f), bulbMat);
-            Part(PrimitiveType.Cylinder, "RoseCup", lab, new Vector3(1.2f, 2.955f, 2.25f), new Vector3(0.045f, 0.02f, 0.045f), bulbMat);
-            Part(PrimitiveType.Cylinder, "Socket", lab, new Vector3(1.2f, 2.49f, 2.25f), new Vector3(0.035f, 0.025f, 0.035f), bulbMat);
-            Part(PrimitiveType.Sphere, "BareBulb", lab, new Vector3(1.2f, 2.42f, 2.25f), new Vector3(0.075f, 0.09f, 0.075f), bulbMat);
+            Model("Desk_lamp", lab, new Vector3(1.2f, 0, 2.25f), kit, new Dictionary<string, Material> { ["Bulb"] = bulbMat, ["Rose"] = bulbMat, ["metal"] = metal, ["dark"] = wall });
             Paint(room, new Dictionary<string, Material>
             {
                 ["Floor"] = floor, ["Walls"] = wall, ["Ceiling"] = ceiling, ["Skirting"] = trim,
@@ -513,45 +499,24 @@ namespace ChalkPhysics.EditorTools
             // the counter by the door: the morning's order sheets lie on it, a sample on each (DESIGN.md 2б, «Листки-заказы»)
             var counterSt = Station("Counter", new Vector3(2.1f, 0, 3.0f), 0);
             // a board hung on the counter's front, under its top, on two cords: «заказы» is written on it at runtime
-            var sign = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            sign.name = "Sign";
-            sign.transform.SetParent(counterSt.transform, false);
-            sign.transform.localPosition = new Vector3(0, TableTop - 0.2f, -0.43f);
-            sign.transform.localScale = new Vector3(0.62f, 0.2f, 0.018f);
-            sign.GetComponent<MeshRenderer>().sharedMaterial = Mat("SignBoard", White, 0, 40, 0.75f, 0, 0);
-            Object.DestroyImmediate(sign.GetComponent<Collider>());
-            foreach (var sx in new[] { -0.26f, 0.26f })
-            {
-                var cord = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                cord.name = "Cord";
-                cord.transform.SetParent(counterSt.transform, false);
-                cord.transform.localPosition = new Vector3(sx, TableTop - 0.07f, -0.42f);
-                cord.transform.localScale = new Vector3(0.006f, 0.08f, 0.006f);
-                cord.GetComponent<MeshRenderer>().sharedMaterial = spring;
-                Object.DestroyImmediate(cord.GetComponent<Collider>());
-            }
+            var signMats = new Dictionary<string, Material> { ["Board"] = Mat("SignBoard", White, 0, 40, 0.75f, 0, 0), ["Cords-Cord"] = spring, ["metal"] = metal };
+            var sign = new GameObject("Sign").transform;   // where the writing goes (Art3D.Signboard): the board's size, no mesh
+            sign.SetParent(counterSt.transform, false);
+            sign.localPosition = new Vector3(0, TableTop - 0.2f, -0.43f);
+            sign.localScale = new Vector3(0.62f, 0.2f, 0.018f);
+            Model("Desk_sign_counter", counterSt.transform, sign.localPosition, kit, signMats).name = "SignBoard";
 
             // a board hung on a table's front (`front` = ±1, the side of local z the room is on), under its top, on two cords
             void Hang(Transform st, float front, float width, float height)
             {
-                var board = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                board.name = "Sign";
-                board.transform.SetParent(st, false);
-                board.transform.localPosition = new Vector3(0, TableTop - 0.07f - height / 2, front * 0.43f);
-                board.transform.localRotation = Quaternion.Euler(0, front > 0 ? 180 : 0, 0);
-                board.transform.localScale = new Vector3(width, height, 0.018f);
-                board.GetComponent<MeshRenderer>().sharedMaterial = Mat("SignBoard", White, 0, 40, 0.75f, 0, 0);
-                Object.DestroyImmediate(board.GetComponent<Collider>());
-                foreach (var sx in new[] { -width * 0.42f, width * 0.42f })
-                {
-                    var cord = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    cord.name = "Cord";
-                    cord.transform.SetParent(st, false);
-                    cord.transform.localPosition = new Vector3(sx, TableTop - 0.07f, front * 0.42f);
-                    cord.transform.localScale = new Vector3(0.006f, 0.08f, 0.006f);
-                    cord.GetComponent<MeshRenderer>().sharedMaterial = spring;
-                    Object.DestroyImmediate(cord.GetComponent<Collider>());
-                }
+                var board = new GameObject("Sign").transform;   // where the writing goes: the board's size, no mesh
+                board.SetParent(st, false);
+                board.localPosition = new Vector3(0, TableTop - 0.07f - height / 2, front * 0.43f);
+                board.localRotation = Quaternion.Euler(0, front > 0 ? 180 : 0, 0);
+                board.localScale = new Vector3(width, height, 0.018f);
+                var m = Model("Desk_sign_dept", st, board.localPosition, kit, signMats);   // 0.5 × 0.16 m, as every department's
+                m.name = "SignBoard";
+                m.localRotation = board.localRotation;
             }
 
             Apparatus3D MakeDyna(Transform parent)
@@ -594,38 +559,23 @@ namespace ChalkPhysics.EditorTools
                 go.transform.SetParent(parent, false);
                 go.transform.localPosition = new Vector3(0, TableTop, 0);
                 var t = go.transform;
-                const float stand = 0.2f, w = 0.34f, hgt = 0.3f, dp = 0.26f, wall = 0.008f, x0 = -0.1f, cx = 0.215f;
-                Part(PrimitiveType.Cube, "StandTop", t, new Vector3(x0, stand - 0.01f, 0), new Vector3(w + 0.06f, 0.02f, dp + 0.06f), metal);
-                foreach (var (lx, lz) in new[] { (-1f, -1f), (1f, -1f), (-1f, 1f), (1f, 1f) })
-                    Part(PrimitiveType.Cube, "StandLeg", t, new Vector3(x0 + lx * (w / 2 + 0.01f), (stand - 0.02f) / 2, lz * (dp / 2 + 0.01f)), new Vector3(0.025f, stand - 0.02f, 0.025f), metal);
+                const float stand = 0.2f, w = 0.34f, hgt = 0.3f, dp = 0.26f, x0 = -0.1f, cx = 0.215f;
+                // the glass and the metal: a Blender model (Tools/Blender/desk.py, overflow); the water is Bath3D's
+                Model("Desk_overflow", t, Vector3.zero, kit, new Dictionary<string, Material>
+                {
+                    ["Tube"] = tubeGlass, ["Can"] = glass, ["Spout"] = glass, ["Foot"] = glass, ["Rim"] = glass, ["metal"] = metal,
+                });
                 float floor = stand + 0.012f;   // the inside of the can's bottom
-                Part(PrimitiveType.Cube, "Bottom", t, new Vector3(x0, stand + 0.006f, 0), new Vector3(w + 2 * wall, 0.012f, dp + wall), glass);
-                Part(PrimitiveType.Cube, "BackWall", t, new Vector3(x0, floor + hgt / 2, -dp / 2 - wall / 2), new Vector3(w + 2 * wall, hgt, wall), glass);
-                Part(PrimitiveType.Cube, "LeftWall", t, new Vector3(x0 - w / 2 - wall / 2, floor + hgt / 2, 0), new Vector3(wall, hgt, dp), glass);
-                Part(PrimitiveType.Cube, "RightWall", t, new Vector3(x0 + w / 2 + wall / 2, floor + hgt / 2, 0), new Vector3(wall, hgt, dp), glass);
-                Part(PrimitiveType.Cube, "FrontRimLow", t, new Vector3(x0, floor, dp / 2 + 0.003f), new Vector3(w + 2 * wall, 0.006f, 0.006f), glass);
-                Part(PrimitiveType.Cube, "FrontRimHigh", t, new Vector3(x0, floor + hgt, dp / 2 + 0.003f), new Vector3(w + 2 * wall, 0.006f, 0.006f), glass);
-                // the spout: out of the right wall at the water's level, over the cylinder's mouth
                 const float spout = 0.2f;
-                var sp = Part(PrimitiveType.Cylinder, "Spout", t, new Vector3((x0 + w / 2 + cx) / 2 + 0.01f, floor + spout - 0.006f, 0), new Vector3(0.026f, (cx - x0 - w / 2) / 2 + 0.01f, 0.026f), glass);
-                sp.transform.localRotation = Quaternion.Euler(0, 0, 84);
                 var tip = new GameObject("SpoutTip").transform;
                 tip.SetParent(t, false);
                 tip.localPosition = new Vector3(cx - 0.01f, floor + spout - 0.016f, 0);
                 // the measuring cylinder on the table: a hundred square centimetres inside, ten centimetres a litre
                 const float r = 0.0564f, ch = 0.37f;
-                Part(PrimitiveType.Cylinder, "CylinderFoot", t, new Vector3(cx, 0.006f, 0), new Vector3(0.16f, 0.006f, 0.16f), glass);
-                Part(PrimitiveType.Cylinder, "CylinderGlass", t, new Vector3(cx, 0.012f + ch / 2, 0), new Vector3(r * 2 + 0.008f, ch / 2, r * 2 + 0.008f), tubeGlass);
-                Part(PrimitiveType.Cylinder, "CylinderRim", t, new Vector3(cx, 0.012f + ch, 0), new Vector3(r * 2 + 0.014f, 0.004f, r * 2 + 0.014f), glass);
                 var cylBase = new GameObject("CylinderBase").transform;
                 cylBase.SetParent(t, false);
                 cylBase.localPosition = new Vector3(cx, 0.012f, 0);
                 var z0 = Part(PrimitiveType.Cube, "ZeroMark", t, new Vector3(cx + 0.02f, 0.012f, r + 0.008f), new Vector3(0.026f, 0.003f, 0.004f), zero);
-                // the hose it drains back by: from the cylinder's foot up into the can's bottom
-                var from = new Vector3(cx - 0.05f, 0.02f, 0.05f);
-                var to = new Vector3(x0 + w / 2 - 0.02f, stand + 0.005f, 0.05f);
-                var hose = Part(PrimitiveType.Cylinder, "Hose", t, (from + to) / 2, new Vector3(0.014f, (to - from).magnitude / 2, 0.014f), metal);
-                hose.transform.localRotation = Quaternion.FromToRotation(Vector3.up, to - from);
                 var seat = new GameObject("Seat").transform;
                 seat.SetParent(t, false);
                 seat.localPosition = new Vector3(x0, floor, 0);
@@ -651,14 +601,11 @@ namespace ChalkPhysics.EditorTools
                 go.transform.localPosition = new Vector3(0, TableTop, 0.05f);
                 var t = go.transform;
                 const float len = 0.6f, hingeX = 0.3f, hingeY = 0.06f;
-                Part(PrimitiveType.Cube, "Base", t, new Vector3(0, 0.01f, 0), new Vector3(0.7f, 0.02f, 0.24f), wood);
-                Part(PrimitiveType.Cube, "HingeBlock", t, new Vector3(hingeX, 0.035f, 0), new Vector3(0.05f, 0.05f, 0.22f), metal);
-                var pivot = new GameObject("Pivot").transform;
-                pivot.SetParent(t, false);
-                pivot.localPosition = new Vector3(hingeX, hingeY, 0);
-                Part(PrimitiveType.Cube, "Board", pivot, new Vector3(-len / 2, 0.01f, 0), new Vector3(len, 0.02f, 0.2f), wood);
-                Part(PrimitiveType.Cube, "Stop", pivot, new Vector3(-0.015f, 0.035f, 0), new Vector3(0.015f, 0.05f, 0.2f), metal);
-                Part(PrimitiveType.Cube, "Needle", pivot, new Vector3(-(0.2f + 0.035f) / 2, 0.021f, 0.112f), new Vector3(0.235f, 0.003f, 0.003f), tick);
+                // a Blender model (Tools/Blender/desk.py, incline): the base, the hinge, the board with its stop and needle
+                // (it turns about the hinge), a clear protractor on a bar
+                var m = Model("Desk_incline", t, Vector3.zero, kit, new Dictionary<string, Material> { ["Board-Needle"] = tick, ["brown"] = wood, ["metal"] = metal });
+                var pivot = Art3D.Pivot(m, "Board", t);
+                pivot.name = "Pivot";
                 var seat = new GameObject("Seat").transform;
                 seat.SetParent(pivot, false);
                 seat.localPosition = new Vector3(-len + 0.11f, 0.02f, 0);
@@ -667,7 +614,6 @@ namespace ChalkPhysics.EditorTools
                 stop.localPosition = new Vector3(-0.1f, 0.02f, 0);
                 // the protractor: an arc round the hinge on the board's front side, its 0° by the board at rest
                 var z0 = Part(PrimitiveType.Cube, "ZeroMark", t, new Vector3(hingeX - 0.2f - 0.015f, hingeY + 0.021f, 0.115f), new Vector3(0.03f, 0.004f, 0.004f), zero);
-                Part(PrimitiveType.Cube, "ProtractorStand", t, new Vector3(hingeX - 0.1f, 0.03f, 0.125f), new Vector3(0.26f, 0.04f, 0.01f), metal);
                 BoxAround(go);
                 var inc = go.AddComponent<Incline3D>();
                 inc.pivot = pivot;
@@ -771,14 +717,10 @@ namespace ChalkPhysics.EditorTools
                 }
                 Hang(st.transform, 1, 0.5f, 0.16f);
                 if (!table)
-                {   // no table: the sign is nailed onto the tub's front, its left half
-                    var cords = new List<GameObject>();
-                    foreach (Transform c in st.transform)
-                    {
-                        if (c.name == "Cord") cords.Add(c.gameObject);
-                        if (c.name == "Sign") c.localPosition = new Vector3(-0.38f, 0.27f, 0.371f);
-                    }
-                    foreach (var c in cords) Object.DestroyImmediate(c);
+                {   // no table: the sign is nailed onto the tub's front, its left half, without its cords
+                    foreach (var n in new[] { "Sign", "SignBoard" }) st.transform.Find(n).localPosition = new Vector3(-0.38f, 0.27f, 0.371f);
+                    foreach (Transform c in st.transform.Find("SignBoard"))
+                        if (c.name.StartsWith("Cords-")) c.gameObject.SetActive(false);
                 }
                 var d = st.AddComponent<Department>();
                 d.id = id;
@@ -898,26 +840,7 @@ namespace ChalkPhysics.EditorTools
             }
 
             // the customers (DESIGN.md 2б, «Заказчики»): outside the lab, in a corridor behind the window over the counter;
-            // they are built at runtime (Persona) of these chalk colours
-            var kit = new PersonaKit
-            {
-                skin = Mat("PSkin", new Color(1f, 0.82f, 0.68f), 0.95f, 70, 0.75f, 0.2f),
-                dark = Mat("PDark", new Color(0.35f, 0.33f, 0.32f), 0.6f, 120, 0.4f, 0.2f),
-                white = Mat("PWhite", White, 0.9f, 70, 0.9f, 0.2f),
-                red = Mat("PRed", new Color(1f, 0.5f, 0.45f), 0.95f, 70, 0.6f, 0.2f),
-                blue = Mat("PBlue", new Color(0.55f, 0.7f, 1f), 0.95f, 70, -0.6f, 0.2f),
-                green = Mat("PGreen", new Color(0.55f, 0.9f, 0.6f), 0.95f, 70, 0.3f, 0.2f),
-                yellow = Mat("PYellow", new Color(1f, 0.9f, 0.45f), 0.95f, 70, 1.1f, 0.2f),
-                brown = Mat("PBrown", new Color(0.85f, 0.62f, 0.42f), 0.95f, 70, -0.3f, 0.2f),
-                grey = Mat("PGrey", new Color(0.75f, 0.75f, 0.75f), 0.9f, 70, 0.75f, 0.2f),
-                orange = Mat("POrange", new Color(1f, 0.65f, 0.35f), 0.95f, 70, -1f, 0.2f),
-                purple = Mat("PPurple", new Color(0.82f, 0.62f, 1f), 0.95f, 70, 0.2f, 0.2f),
-                metal = metal,
-                clear = Clear("PGlass", new Color(0.75f, 0.9f, 1f, 0.22f)),
-                pink = Mat("PPink", new Color(1f, 0.62f, 0.72f), 1.0f, 80, 0.5f, 0.25f),
-                water = Clear("PondWater", new Color(0.4f, 0.68f, 0.92f, 0.28f)),
-                line = Plain("FishingLine", new Color(0.93f, 0.93f, 0.89f)),
-            };
+            // they are Blender models (Tools/Blender/customers.py) put in at runtime (Persona), painted in the kit's colours
             var customers = new List<Customer3D>();
             for (int i = 0; i < 6; i++)
             {
@@ -944,9 +867,8 @@ namespace ChalkPhysics.EditorTools
                 Part(PrimitiveType.Cube, "CorridorCeiling", corr, new Vector3(1.8f, 3.03f, 4.35f), new Vector3(5.4f, 0.06f, 1.4f), ceiling);
                 Part(PrimitiveType.Cube, "CorridorEndL", corr, new Vector3(-0.95f, 1.5f, 4.35f), new Vector3(0.1f, 3f, 1.4f), wall);
                 Part(PrimitiveType.Cube, "CorridorEndR", corr, new Vector3(4.55f, 1.5f, 4.35f), new Vector3(0.1f, 3f, 1.4f), wall);
-                Part(PrimitiveType.Cube, "Sill", corr, new Vector3(CustomerLine.Window.x, TableTop - 0.004f, 3.58f), new Vector3(1.25f, 0.03f, 0.36f), wood);   // a little over the opening's bottom: never in one plane with it
-                Part(PrimitiveType.Cube, "SillBracket", corr, new Vector3(CustomerLine.Window.x - 0.45f, TableTop - 0.09f, 3.7f), new Vector3(0.03f, 0.14f, 0.12f), wood);
-                Part(PrimitiveType.Cube, "SillBracket", corr, new Vector3(CustomerLine.Window.x + 0.45f, TableTop - 0.09f, 3.7f), new Vector3(0.03f, 0.14f, 0.12f), wood);
+                // the sill on its brackets, a little over the opening's bottom: never in one plane with it
+                Model("Desk_sill", corr, new Vector3(CustomerLine.Window.x, TableTop - 0.004f, 3.58f), kit, new Dictionary<string, Material> { ["brown"] = wood });
             }
 
             var who = new GameObject("Scientist");
@@ -977,13 +899,20 @@ namespace ChalkPhysics.EditorTools
             walker.eye = eye;
 
             var game = new GameObject("Lab3D").AddComponent<Lab3DGame>();
+            {   // the models made at runtime (customers...): every FBX under Models, found by its file name (ModelLibrary)
+                var lib = game.gameObject.AddComponent<ModelLibrary>();
+                var paths = new List<string>();
+                foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { Models })) paths.Add(AssetDatabase.GUIDToAssetPath(guid));
+                paths.Sort(System.StringComparer.Ordinal);
+                foreach (var path in paths) { var mdl = AssetDatabase.LoadAssetAtPath<GameObject>(path); if (mdl != null) lib.models.Add(mdl); }
+            }
             game.walker = walker;
             game.eye = eye;
             game.crate = counterSt.transform;
             game.sheets = sheets;
             game.counter = counterSt.transform;
             game.counterSign = sign.transform;
-            BuildDesk(counterSt.transform, game, wood, metal, spring);
+            BuildDesk(counterSt.transform, game, kit, wood, metal);
             game.partition = partition.transform;
             game.partitionSide = partitionSide.transform;
             game.cornerFL = cornerFL;
@@ -1006,15 +935,8 @@ namespace ChalkPhysics.EditorTools
                 Vector3 dir = thinX ? new Vector3(Mathf.Sign(centre.x - db.center.x), 0, 0) : new Vector3(0, 0, Mathf.Sign(centre.z - db.center.z));
                 Vector3 face = thinX ? new Vector3(dir.x > 0 ? db.max.x : db.min.x, db.min.y + 1.0f, db.min.z + 0.12f)
                                      : new Vector3(db.min.x + 0.12f, db.min.y + 1.0f, dir.z > 0 ? db.max.z : db.min.z);
-                var axis = Quaternion.FromToRotation(Vector3.up, dir);
-                void Knob(PrimitiveType type, string name, float outward, Vector3 size)
-                {
-                    var k = Part(type, name, lab, lab.InverseTransformPoint(face + dir * outward), size, metal);
-                    k.transform.rotation = axis;
-                }
-                Knob(PrimitiveType.Cylinder, "DoorKnobRose", 0.006f, new Vector3(0.07f, 0.006f, 0.07f));
-                Knob(PrimitiveType.Cylinder, "DoorKnobNeck", 0.03f, new Vector3(0.024f, 0.022f, 0.024f));
-                Knob(PrimitiveType.Sphere, "DoorKnob", 0.062f, new Vector3(0.058f, 0.05f, 0.058f));
+                var knob = Model("Desk_doorknob", lab, lab.InverseTransformPoint(face), kit, new Dictionary<string, Material> { ["Knob"] = metal });
+                knob.rotation = Quaternion.LookRotation(dir, Vector3.up);   // out of the door, into the room
             }
             game.sampleMats = new[] { light, mid, dense };
             {   // a certificate (DESIGN.md 2б, «Грамоты»): a golden frame round a sheet of paper, on a cord from a nail; hidden —
@@ -1023,22 +945,7 @@ namespace ChalkPhysics.EditorTools
                 cert.transform.SetParent(lab, false);
                 var gold = Mat("FrameGold", new Color(1f, 0.85f, 0.45f), 0.65f, 70, 0.6f, 0.2f);
                 var bare = Mat("Paper", White, 0, 40, 0.75f, 0, 0);
-                Part(PrimitiveType.Cube, "Paper", cert.transform, Vector3.zero, new Vector3(0.3f, 0.4f, 0.006f), bare);
-                const float fw = 0.022f, fd = 0.02f;
-                Part(PrimitiveType.Cube, "FrameTop", cert.transform, new Vector3(0, 0.2f + fw / 2, 0.004f), new Vector3(0.3f + 2 * fw, fw, fd), gold);
-                Part(PrimitiveType.Cube, "FrameBottom", cert.transform, new Vector3(0, -0.2f - fw / 2, 0.004f), new Vector3(0.3f + 2 * fw, fw, fd), gold);
-                Part(PrimitiveType.Cube, "FrameLeft", cert.transform, new Vector3(-0.15f - fw / 2, 0, 0.004f), new Vector3(fw, 0.4f, fd), gold);
-                Part(PrimitiveType.Cube, "FrameRight", cert.transform, new Vector3(0.15f + fw / 2, 0, 0.004f), new Vector3(fw, 0.4f, fd), gold);
-                // the cord, from the frame's top corners up to a nail
-                foreach (float sx in new[] { -1f, 1f })
-                {
-                    var a = new Vector3(sx * 0.12f, 0.222f, -0.004f);
-                    var b = new Vector3(0, 0.29f, -0.004f);
-                    var cord = Part(PrimitiveType.Cylinder, "Cord", cert.transform, (a + b) / 2, new Vector3(0.003f, (b - a).magnitude / 2, 0.003f), spring);
-                    cord.transform.localRotation = Quaternion.FromToRotation(Vector3.up, b - a);
-                }
-                Part(PrimitiveType.Sphere, "Nail", cert.transform, new Vector3(0, 0.29f, -0.002f), new Vector3(0.012f, 0.012f, 0.012f), metal);
-                foreach (var c in cert.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
+                Model("Desk_certificate", cert.transform, Vector3.zero, kit, new Dictionary<string, Material> { ["Paper"] = bare, ["Frame"] = gold, ["Cord"] = spring, ["metal"] = metal });
                 var col = cert.AddComponent<BoxCollider>();
                 col.center = new Vector3(0, 0, 0.002f);
                 col.size = new Vector3(0.344f, 0.444f, 0.026f);
@@ -1078,13 +985,10 @@ namespace ChalkPhysics.EditorTools
                 sw.transform.SetParent(lab, false);
                 sw.transform.localPosition = new Vector3(LabRoom.RightWall - 0.01f, 1.3f, 1.2f);
                 sw.transform.localRotation = Quaternion.Euler(0, -90, 0);   // its face looks into the room
-                Part(PrimitiveType.Cube, "SwitchPlate", sw.transform, Vector3.zero, new Vector3(0.09f, 0.13f, 0.012f), trim);
-                var toggle = new GameObject("Toggle").transform;
-                toggle.SetParent(sw.transform, false);
-                toggle.localPosition = new Vector3(0, 0.01f, 0.006f);
-                Part(PrimitiveType.Cube, "SwitchKey", toggle, new Vector3(0, 0, 0.008f), new Vector3(0.035f, 0.055f, 0.016f), metal);
-                var dot = Part(PrimitiveType.Sphere, "SwitchGlow", sw.transform, new Vector3(0, -0.045f, 0.008f), new Vector3(0.012f, 0.012f, 0.008f), kit.green);
-                dot.layer = Lab3DGame.GlowLayer;   // seen in the dark: where the switch is
+                var m = Model("Desk_switch", sw.transform, Vector3.zero, kit, new Dictionary<string, Material> { ["Plate"] = trim, ["metal"] = metal });
+                var toggle = Art3D.Pivot(m, "Toggle", sw.transform);
+                foreach (var r in m.GetComponentsInChildren<Renderer>(true))
+                    if (r.name.StartsWith("Glow-")) r.gameObject.layer = Lab3DGame.GlowLayer;   // seen in the dark: where the switch is
                 var col = sw.AddComponent<BoxCollider>();
                 col.size = new Vector3(0.14f, 0.18f, 0.06f);
                 var ls = sw.AddComponent<LightSwitch>();
